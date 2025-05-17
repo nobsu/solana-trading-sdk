@@ -19,7 +19,7 @@ pub struct TradingClient {
 impl TradingClient {
     pub fn new(config: TradingConfig) -> anyhow::Result<Self> {
         let rpc = Arc::new(RpcClient::new(config.rpc_url));
-        let swqos = config.swqos.into_iter().map(|swqos| swqos.into()).collect();
+        let swqos = config.swqos.into_iter().map(|swqos| swqos.instantiate(rpc.clone())).collect();
         let endpoint = Arc::new(TradingEndpoint::new(rpc, swqos));
         let dexs = DexType::all()
             .into_iter()

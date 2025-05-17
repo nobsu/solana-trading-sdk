@@ -29,6 +29,7 @@ impl TradingEndpoint {
         tip: Option<u64>,
     ) -> anyhow::Result<Vec<Signature>> {
         let mut tasks = vec![];
+        let mut signatures = vec![];
         for swqos in &self.swqos {
             let tip = if let Some(tip_account) = swqos.get_tip_account() {
                 if let Some(tip) = tip {
@@ -45,10 +46,11 @@ impl TradingEndpoint {
             };
 
             let tx = build_transaction(payer, instructions.clone(), blockhash, fee, tip)?;
+            signatures.push(tx.signatures[0]);
             tasks.push(swqos.send_transaction(tx));
         }
 
-        let signatures = futures::future::try_join_all(tasks).await?;
+        futures::future::try_join_all(tasks).await?;
 
         Ok(signatures)
     }
