@@ -1,7 +1,7 @@
 use nextblock::NEXTBLOCK_TIP_ACCOUNTS;
 use solana_client::nonblocking::rpc_client::RpcClient;
 use solana_sdk::{pubkey::Pubkey, transaction::VersionedTransaction};
-use std::sync::Arc;
+use std::{any::Any, sync::Arc};
 
 pub mod default;
 pub mod jito;
@@ -16,11 +16,11 @@ pub enum SWQoSType {
     Jito(String, String),
     NextBlock(String, String),
     Temporal(String, String),
-    Zeroslot(String, String),
+    ZeroSlot(String, String),
 }
 
 #[async_trait::async_trait]
-pub trait SWQoSTrait: Send + Sync {
+pub trait SWQoSTrait: Send + Sync + Any {
     async fn send_transaction(&self, transaction: VersionedTransaction) -> anyhow::Result<()>;
     async fn send_transactions(&self, transactions: Vec<VersionedTransaction>) -> anyhow::Result<()>;
     fn get_tip_account(&self) -> Option<Pubkey>;
@@ -30,19 +30,14 @@ pub trait SWQoSTrait: Send + Sync {
 impl SWQoSType {
     pub fn instantiate(&self, rpc_client: Arc<RpcClient>) -> Arc<dyn SWQoSTrait> {
         match self {
-            SWQoSType::Default(endpoint, _) => Arc::new(default::DefaultSWQoSClient::new(
-                "default",
-                rpc_client,
-                endpoint.to_string(),
-                vec![],
-            )),
+            SWQoSType::Default(endpoint, _) => Arc::new(default::DefaultSWQoSClient::new("default", rpc_client, endpoint.to_string(), vec![])),
             SWQoSType::NextBlock(endpoint, auth_token) => Arc::new(default::DefaultSWQoSClient::new(
                 "nextblock",
                 rpc_client,
                 format!("{}/api-key={}", endpoint, auth_token),
                 NEXTBLOCK_TIP_ACCOUNTS.into(),
             )),
-            SWQoSType::Zeroslot(endpoint, auth_token) => Arc::new(default::DefaultSWQoSClient::new(
+            SWQoSType::ZeroSlot(endpoint, auth_token) => Arc::new(default::DefaultSWQoSClient::new(
                 "0slot",
                 rpc_client,
                 format!("{}/api-key={}", endpoint, auth_token),

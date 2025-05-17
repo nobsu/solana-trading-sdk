@@ -41,3 +41,11 @@ pub fn amm_sell_get_sol_out(sol_reserve: u64, token_reserve: u64, token_in: u64)
 
     sol_out as u64
 }
+
+pub fn calculate_with_slippage_buy(amount: u64, basis_points: u64) -> u64 {
+    amount + (amount * basis_points) / 10000
+}
+
+pub fn calculate_with_slippage_sell(amount: u64, basis_points: u64) -> u64 {
+    amount - (amount * basis_points) / 10000
+}
