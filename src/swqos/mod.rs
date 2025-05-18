@@ -8,6 +8,7 @@ pub mod zeroslot;
 
 use blox::BloxClient;
 use default::DefaultSWQoSClient;
+use jito::JitoClient;
 use nextblock::{NextBlockClient, NEXTBLOCK_TIP_ACCOUNTS};
 use solana_client::nonblocking::rpc_client::RpcClient;
 use solana_sdk::{pubkey::Pubkey, transaction::VersionedTransaction};
@@ -36,13 +37,7 @@ impl SWQoSType {
     pub fn instantiate(&self, rpc_client: Arc<RpcClient>) -> Arc<dyn SWQoSTrait> {
         match self {
             SWQoSType::Default(endpoint, _) => Arc::new(DefaultSWQoSClient::new("default", rpc_client, endpoint.to_string(), None, vec![])),
-            SWQoSType::Jito(endpoint, auth_token) => Arc::new(DefaultSWQoSClient::new(
-                "jito",
-                rpc_client,
-                format!("{}/api-key={}", endpoint, auth_token),
-                None,
-                NEXTBLOCK_TIP_ACCOUNTS.into(),
-            )),
+            SWQoSType::Jito(endpoint, _) => Arc::new(JitoClient::new(rpc_client, endpoint.to_string())),
             SWQoSType::NextBlock(endpoint, auth_token) => Arc::new(NextBlockClient::new(rpc_client, endpoint.to_string(), auth_token.to_string())),
             SWQoSType::Blox(endpoint, auth_token) => Arc::new(BloxClient::new(rpc_client, endpoint.to_string(), auth_token.to_string())),
             SWQoSType::ZeroSlot(endpoint, auth_token) => Arc::new(DefaultSWQoSClient::new(
