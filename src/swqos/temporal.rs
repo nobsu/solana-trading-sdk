@@ -19,3 +19,8 @@ pub const TEMPORAL_TIP_ACCOUNTS: &[Pubkey] = &[
     pubkey!("nozWNju6dY353eMkMqURqwQEoM3SFgEKC6psLCSfUne"),
     pubkey!("nozxNBgWohjR75vdspfxR5H9ceC7XXH99xpxhVGt3Bb"),
 ];
+
+pub const TEMPORAL_ENDPOINT_FRA: &str = "http://fra2.nozomi.temporal.xyz";
+pub const TEMPORAL_ENDPOINT_EWR: &str = "http://ewr1.nozomi.temporal.xyz";
+pub const TEMPORAL_ENDPOINT_PITT: &str = "http://pit1.nozomi.temporal.xyz";
+pub const TEMPORAL_ENDPOINT_AMS: &str = "http://ams1.nozomi.temporal.xyz";

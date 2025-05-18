@@ -1,27 +1,26 @@
-use super::SWQoSTrait;
-use crate::swqos::swqos_rpc::SWQoSClientTrait;
-use base64::{engine::general_purpose, Engine};
+use super::{swqos_rpc::SWQoSClientTrait, SWQoSTrait};
+use crate::swqos::swqos_rpc::FormatBase64VersionedTransaction;
 use rand::seq::IndexedRandom;
 use solana_client::nonblocking::rpc_client::RpcClient;
 use solana_sdk::{pubkey, pubkey::Pubkey, transaction::VersionedTransaction};
 use std::sync::Arc;
 
-pub const NEXTBLOCK_TIP_ACCOUNTS: &[Pubkey] = &[
-    pubkey!("NextbLoCkVtMGcV47JzewQdvBpLqT9TxQFozQkN98pE"),
-    pubkey!("NexTbLoCkWykbLuB1NkjXgFWkX9oAtcoagQegygXXA2"),
-    pubkey!("NeXTBLoCKs9F1y5PJS9CKrFNNLU1keHW71rfh7KgA1X"),
-    pubkey!("NexTBLockJYZ7QD7p2byrUa6df8ndV2WSd8GkbWqfbb"),
-    pubkey!("neXtBLock1LeC67jYd1QdAa32kbVeubsfPNTJC1V5At"),
-    pubkey!("nEXTBLockYgngeRmRrjDV31mGSekVPqZoMGhQEZtPVG"),
-    pubkey!("NEXTbLoCkB51HpLBLojQfpyVAMorm3zzKg7w9NFdqid"),
-    pubkey!("nextBLoCkPMgmG8ZgJtABeScP35qLa2AMCNKntAP7Xc"),
+pub const BLOX_TIP_ACCOUNTS: &[Pubkey] = &[
+    pubkey!("HWEoBxYs7ssKuudEjzjmpfJVX7Dvi7wescFsVx2L5yoY"),
+    pubkey!("95cfoy472fcQHaw4tPGBTKpn6ZQnfEPfBgDQx6gcRmRg"),
+    pubkey!("3UQUKjhMKaY2S6bjcQD6yHB7utcZt5bfarRCmctpRtUd"),
+    pubkey!("FogxVNs6Mm2w9rnGL1vkARSwJxvLE8mujTv3LK8RnUhF"),
 ];
 
-pub const NEXTBLOCK_ENDPOINT_FRA: &str = "https://fra.nextblock.io";
-pub const NEXTBLOCK_ENDPOINT_NY: &str = "https://ny.nextblock.io";
+pub const BLOX_ENDPOINT_FRA: &str = "https://germany.solana.dex.blxrbdn.com";
+pub const BLOX_ENDPOINT_AMS: &str = "https://amsterdam.solana.dex.blxrbdn.com";
+pub const BLOX_ENDPOINT_NY: &str = "https://ny.solana.dex.blxrbdn.com";
+pub const BLOX_ENDPOINT_UK: &str = "https://uk.solana.dex.blxrbdn.com";
+pub const BLOX_ENDPOINT_LA: &str = "https://la.solana.dex.blxrbdn.com";
+pub const BLOX_ENDPOINT_TOKYO: &str = "https://tokyo.solana.dex.blxrbdn.com";
 
 #[derive(Clone)]
-pub struct NextBlockClient {
+pub struct BloxClient {
     pub rpc_client: Arc<RpcClient>,
     pub swqos_endpoint: String,
     pub swqos_header: (String, String),
@@ -29,15 +28,14 @@ pub struct NextBlockClient {
 }
 
 #[async_trait::async_trait]
-impl SWQoSTrait for NextBlockClient {
+impl SWQoSTrait for BloxClient {
     async fn send_transaction(&self, transaction: VersionedTransaction) -> anyhow::Result<()> {
-        let tx_bytes = bincode::serialize(&transaction)?;
-        let tx_base64 = general_purpose::STANDARD.encode(tx_bytes);
         let body = serde_json::json!({
             "transaction": {
-                "content": tx_base64,
+                "content": transaction.to_base64_string(),
             },
             "frontRunningProtection": false,
+            "useStakedRPCs": true,
         });
 
         let url = format!("{}/api/v2/submit", self.swqos_endpoint);
@@ -50,11 +48,9 @@ impl SWQoSTrait for NextBlockClient {
             "entries":  transactions
                 .iter()
                 .map(|tx| {
-                    let tx_bytes = bincode::serialize(tx).unwrap();
-                    let tx_base64 = general_purpose::STANDARD.encode(tx_bytes);
                     serde_json::json!({
                         "transaction": {
-                            "content": tx_base64,
+                            "content": tx.to_base64_string(),
                         },
                     })
                 })
@@ -67,15 +63,15 @@ impl SWQoSTrait for NextBlockClient {
     }
 
     fn get_tip_account(&self) -> Option<Pubkey> {
-        Some(*NEXTBLOCK_TIP_ACCOUNTS.choose(&mut rand::rng())?)
+        Some(*BLOX_TIP_ACCOUNTS.choose(&mut rand::rng())?)
     }
 
     fn get_name(&self) -> &str {
-        "nextblock"
+        "blox"
     }
 }
 
-impl NextBlockClient {
+impl BloxClient {
     pub fn new(rpc_client: Arc<RpcClient>, endpoint: String, auth_token: String) -> Self {
         let swqos_client = reqwest::Client::new_swqos_client();
 

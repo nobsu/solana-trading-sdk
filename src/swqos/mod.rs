@@ -1,8 +1,4 @@
-use nextblock::NEXTBLOCK_TIP_ACCOUNTS;
-use solana_client::nonblocking::rpc_client::RpcClient;
-use solana_sdk::{pubkey::Pubkey, transaction::VersionedTransaction};
-use std::{any::Any, sync::Arc};
-
+pub mod blox;
 pub mod default;
 pub mod jito;
 pub mod nextblock;
@@ -10,11 +6,20 @@ pub mod swqos_rpc;
 pub mod temporal;
 pub mod zeroslot;
 
+use blox::BloxClient;
+use default::DefaultSWQoSClient;
+use nextblock::{NextBlockClient, NEXTBLOCK_TIP_ACCOUNTS};
+use solana_client::nonblocking::rpc_client::RpcClient;
+use solana_sdk::{pubkey::Pubkey, transaction::VersionedTransaction};
+use std::{any::Any, sync::Arc};
+
+// (endpoint, auth_token)
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum SWQoSType {
     Default(String, String),
     Jito(String, String),
     NextBlock(String, String),
+    Blox(String, String),
     Temporal(String, String),
     ZeroSlot(String, String),
 }
@@ -30,29 +35,29 @@ pub trait SWQoSTrait: Send + Sync + Any {
 impl SWQoSType {
     pub fn instantiate(&self, rpc_client: Arc<RpcClient>) -> Arc<dyn SWQoSTrait> {
         match self {
-            SWQoSType::Default(endpoint, _) => Arc::new(default::DefaultSWQoSClient::new("default", rpc_client, endpoint.to_string(), vec![])),
-            SWQoSType::NextBlock(endpoint, auth_token) => Arc::new(default::DefaultSWQoSClient::new(
-                "nextblock",
-                rpc_client,
-                format!("{}/api-key={}", endpoint, auth_token),
-                NEXTBLOCK_TIP_ACCOUNTS.into(),
-            )),
-            SWQoSType::ZeroSlot(endpoint, auth_token) => Arc::new(default::DefaultSWQoSClient::new(
-                "0slot",
-                rpc_client,
-                format!("{}/api-key={}", endpoint, auth_token),
-                NEXTBLOCK_TIP_ACCOUNTS.into(),
-            )),
-            SWQoSType::Jito(endpoint, auth_token) => Arc::new(default::DefaultSWQoSClient::new(
+            SWQoSType::Default(endpoint, _) => Arc::new(DefaultSWQoSClient::new("default", rpc_client, endpoint.to_string(), None, vec![])),
+            SWQoSType::Jito(endpoint, auth_token) => Arc::new(DefaultSWQoSClient::new(
                 "jito",
                 rpc_client,
                 format!("{}/api-key={}", endpoint, auth_token),
+                None,
                 NEXTBLOCK_TIP_ACCOUNTS.into(),
             )),
-            SWQoSType::Temporal(endpoint, auth_token) => Arc::new(default::DefaultSWQoSClient::new(
-                "temporal",
+            SWQoSType::NextBlock(endpoint, auth_token) => Arc::new(NextBlockClient::new(rpc_client, endpoint.to_string(), auth_token.to_string())),
+            SWQoSType::Blox(endpoint, auth_token) => Arc::new(BloxClient::new(rpc_client, endpoint.to_string(), auth_token.to_string())),
+            SWQoSType::ZeroSlot(endpoint, auth_token) => Arc::new(DefaultSWQoSClient::new(
+                "0slot",
                 rpc_client,
                 format!("{}/api-key={}", endpoint, auth_token),
+                None,
+                NEXTBLOCK_TIP_ACCOUNTS.into(),
+            )),
+
+            SWQoSType::Temporal(endpoint, auth_token) => Arc::new(DefaultSWQoSClient::new(
+                "temporal",
+                rpc_client,
+                format!("{}/c={}", endpoint, auth_token),
+                None,
                 NEXTBLOCK_TIP_ACCOUNTS.into(),
             )),
         }
