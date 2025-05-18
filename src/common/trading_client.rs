@@ -1,6 +1,6 @@
 use super::trading_endpoint::TradingEndpoint;
 use crate::{
-    dex::{DexTrait, DexType},
+    dex::{dex_traits::DexTrait, types::DexType},
     swqos::SWQoSType,
 };
 use solana_client::nonblocking::rpc_client::RpcClient;
@@ -21,10 +21,7 @@ impl TradingClient {
         let rpc = Arc::new(RpcClient::new(config.rpc_url));
         let swqos = config.swqos.into_iter().map(|swqos| swqos.instantiate(rpc.clone())).collect();
         let endpoint = Arc::new(TradingEndpoint::new(rpc, swqos));
-        let dexs = DexType::all()
-            .into_iter()
-            .map(|dex| (dex, dex.instantiate(endpoint.clone())))
-            .collect();
+        let dexs = DexType::all().into_iter().map(|dex| (dex, dex.instantiate(endpoint.clone()))).collect();
 
         Ok(Self { endpoint, dexs })
     }

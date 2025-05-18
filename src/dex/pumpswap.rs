@@ -1,6 +1,7 @@
 use super::{
     amm_calc::{amm_buy_get_token_out, amm_sell_get_sol_out, calculate_with_slippage_buy, calculate_with_slippage_sell},
-    DexTrait, TokenAmountType,
+    dex_traits::DexTrait,
+    types::{Create, TokenAmountType},
 };
 use crate::{
     common::{accounts::PUBKEY_WSOL, trading_endpoint::TradingEndpoint},
@@ -24,8 +25,7 @@ use solana_sdk::{
     signer::Signer,
 };
 use spl_associated_token_account::get_associated_token_address;
-use std::str::FromStr;
-use std::sync::Arc;
+use std::{str::FromStr, sync::Arc};
 
 pub const PUBKEY_PUMPSWAP: Pubkey = pubkey!("pAMMBay6oceH9fJKBRHGP5D4bD4sWpmSwMn52FMfXEA");
 pub const PUBKEY_GLOBAL_ACCOUNT: Pubkey = pubkey!("ADyA8hdefvWN2dbGGWFotbzWxrAvLW83WG6QCVXvJKqw");
@@ -78,7 +78,7 @@ impl DexTrait for PumpSwap {
         Ok(())
     }
 
-    fn create(&self, _: u64) -> anyhow::Result<u64> {
+    async fn create(&self, _: Keypair, _: Create, _: Option<PriorityFee>, _: Option<u64>) -> anyhow::Result<Vec<Signature>> {
         Err(anyhow::anyhow!("Not supported"))
     }
 
