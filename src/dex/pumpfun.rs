@@ -5,7 +5,7 @@ use super::{
 };
 use crate::{
     common::trading_endpoint::TradingEndpoint,
-    instruction::builder::{build_sell_instructions, build_wsol_buy_instructions, PriorityFee},
+    instruction::builder::{build_buy_instructions, build_sell_instructions, PriorityFee},
 };
 use borsh::{BorshDeserialize, BorshSerialize};
 use once_cell::sync::OnceCell;
@@ -31,6 +31,9 @@ pub const MINT_AUTHORITY_SEED: &[u8] = b"mint-authority";
 pub const BONDING_CURVE_SEED: &[u8] = b"bonding-curve";
 pub const CREATOR_VAULT_SEED: &[u8] = b"creator-vault";
 pub const METADATA_SEED: &[u8] = b"metadata";
+
+pub const INITIAL_VIRTUAL_TOKEN_RESERVES: u64 = 1_073_000_000_000_000;
+pub const INITIAL_VIRTUAL_SOL_RESERVES: u64 = 30_000_000_000;
 
 lazy_static::lazy_static! {
     static ref PUBKEY_MINT_AUTHORITY_PDA: Pubkey = Pubkey::find_program_address(&[MINT_AUTHORITY_SEED], &PUBKEY_PUMPFUN).0;
@@ -142,12 +145,15 @@ impl DexTrait for Pumpfun {
 
     async fn create(&self, payer: Keypair, create: Create, fee: Option<PriorityFee>, tip: Option<u64>) -> anyhow::Result<Vec<Signature>> {
         let mint = create.mint;
+        let buy_sol_amount = create.buy_sol_amount;
         let create_info = CreateInfo::from_create(create, payer.pubkey());
         let mut buffer = Vec::new();
         create_info.serialize(&mut buffer)?;
 
-        let bonding_curve: Pubkey = Self::get_bonding_curve_pda(&mint).unwrap();
+        let blockhash = self.endpoint.rpc.get_latest_blockhash().await?;
+        let bonding_curve = Self::get_bonding_curve_pda(&mint).ok_or(anyhow::anyhow!("Bonding curve not found"))?;
 
+        let mut instructions = vec![];
         let create_instruction = Instruction::new_with_bytes(
             PUBKEY_PUMPFUN,
             &buffer,
@@ -169,8 +175,26 @@ impl DexTrait for Pumpfun {
             ],
         );
 
-        let blockhash = self.endpoint.rpc.get_latest_blockhash().await?;
-        let signatures = self.endpoint.send_transactions(&payer, vec![create_instruction], blockhash, fee, tip).await?;
+        instructions.push(create_instruction);
+
+        if let Some(buy_sol_amount) = buy_sol_amount {
+            let buy_token_amount = amm_buy_get_token_out(INITIAL_VIRTUAL_SOL_RESERVES, INITIAL_VIRTUAL_TOKEN_RESERVES, buy_sol_amount);
+            let creator_vault = Self::get_creator_vault_pda(&payer.pubkey()).unwrap();
+            let bonding_curve = Self::get_bonding_curve_pda(&mint).ok_or(anyhow::anyhow!("Bonding curve not found"))?;
+            let buy_instruction = self.build_buy_instruction(
+                &payer,
+                &mint,
+                &bonding_curve,
+                &creator_vault,
+                Buy {
+                    token_amount: buy_token_amount,
+                    sol_amount: buy_sol_amount,
+                },
+            )?;
+            instructions.push(buy_instruction);
+        }
+
+        let signatures = self.endpoint.send_transactions(&payer, instructions, blockhash, fee, tip).await?;
 
         Ok(signatures)
     }
@@ -231,7 +255,7 @@ impl DexTrait for Pumpfun {
                 sol_amount,
             },
         )?;
-        let instructions = build_wsol_buy_instructions(payer, mint, sol_amount, instruction)?;
+        let instructions = build_buy_instructions(payer, mint, instruction)?;
         let signatures = self.endpoint.send_transactions(payer, instructions, blockhash, fee, tip).await?;
 
         Ok(signatures)
