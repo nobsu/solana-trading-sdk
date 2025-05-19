@@ -1,4 +1,7 @@
-use super::{swqos_rpc::SWQoSClientTrait, SWQoSTrait};
+use super::{
+    swqos_rpc::{SWQoSClientTrait, SWQoSRequest},
+    SWQoSTrait,
+};
 use crate::swqos::swqos_rpc::FormatBase64VersionedTransaction;
 use rand::seq::IndexedRandom;
 use solana_client::nonblocking::rpc_client::RpcClient;
@@ -23,7 +26,7 @@ pub const BLOX_ENDPOINT_TOKYO: &str = "https://tokyo.solana.dex.blxrbdn.com";
 pub struct BloxClient {
     pub rpc_client: Arc<RpcClient>,
     pub swqos_endpoint: String,
-    pub swqos_header: (String, String),
+    pub swqos_header: Option<(String, String)>,
     pub swqos_client: Arc<reqwest::Client>,
 }
 
@@ -38,9 +41,17 @@ impl SWQoSTrait for BloxClient {
             "useStakedRPCs": true,
         });
 
-        let url = format!("{}/api/v2/submit", self.swqos_endpoint);
-        self.swqos_client.json_post(&url, Some(self.swqos_header.clone()), body).await?;
-        Ok(())
+        self.swqos_client
+            .swqos_json_post(
+                SWQoSRequest {
+                    name: self.get_name().to_string(),
+                    url: format!("{}/api/v2/submit", self.swqos_endpoint),
+                    auth_header: self.swqos_header.clone(),
+                    transactions: vec![transaction],
+                },
+                body,
+            )
+            .await
     }
 
     async fn send_transactions(&self, transactions: Vec<VersionedTransaction>) -> anyhow::Result<()> {
@@ -57,9 +68,17 @@ impl SWQoSTrait for BloxClient {
                 .collect::<Vec<_>>(),
         });
 
-        let url = format!("{}/api/v2/submit-batch", self.swqos_endpoint);
-        self.swqos_client.json_post(&url, Some(self.swqos_header.clone()), body).await?;
-        Ok(())
+        self.swqos_client
+            .swqos_json_post(
+                SWQoSRequest {
+                    name: self.get_name().to_string(),
+                    url: format!("{}/api/v2/submit-batch", self.swqos_endpoint),
+                    auth_header: self.swqos_header.clone(),
+                    transactions,
+                },
+                body,
+            )
+            .await
     }
 
     fn get_tip_account(&self) -> Option<Pubkey> {
@@ -78,7 +97,7 @@ impl BloxClient {
         Self {
             rpc_client,
             swqos_endpoint: endpoint,
-            swqos_header: ("Authorization".to_string(), auth_token),
+            swqos_header: Some(("Authorization".to_string(), auth_token)),
             swqos_client: Arc::new(swqos_client),
         }
     }

@@ -1,4 +1,7 @@
-use super::{swqos_rpc::SWQoSClientTrait, SWQoSTrait};
+use super::{
+    swqos_rpc::{SWQoSClientTrait, SWQoSRequest},
+    SWQoSTrait,
+};
 use rand::seq::IndexedRandom;
 use solana_client::nonblocking::rpc_client::RpcClient;
 use solana_sdk::{pubkey::Pubkey, transaction::VersionedTransaction};
@@ -18,13 +21,23 @@ pub struct DefaultSWQoSClient {
 impl SWQoSTrait for DefaultSWQoSClient {
     async fn send_transaction(&self, transaction: VersionedTransaction) -> anyhow::Result<()> {
         self.swqos_client
-            .send_swqos_transaction(&self.swqos_endpoint, self.swqos_header.clone(), &transaction)
+            .swqos_send_transaction(SWQoSRequest {
+                name: self.name.clone(),
+                url: self.swqos_endpoint.clone(),
+                auth_header: self.swqos_header.clone(),
+                transactions: vec![transaction],
+            })
             .await
     }
 
     async fn send_transactions(&self, transactions: Vec<VersionedTransaction>) -> anyhow::Result<()> {
         self.swqos_client
-            .send_swqos_transactions(&self.swqos_endpoint, self.swqos_header.clone(), &transactions)
+            .swqos_send_transactions(SWQoSRequest {
+                name: self.name.clone(),
+                url: self.swqos_endpoint.clone(),
+                auth_header: self.swqos_header.clone(),
+                transactions,
+            })
             .await
     }
 

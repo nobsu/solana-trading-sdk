@@ -138,7 +138,7 @@ impl DexTrait for Pumpfun {
 
     fn initialized(&self) -> anyhow::Result<()> {
         if self.global_account.get().is_none() {
-            return Err(anyhow::anyhow!("PumpSwap not initialized"));
+            return Err(anyhow::anyhow!("Pumpfun not initialized"));
         }
         Ok(())
     }
@@ -194,7 +194,7 @@ impl DexTrait for Pumpfun {
             instructions.push(buy_instruction);
         }
 
-        let signatures = self.endpoint.send_transactions(&payer, instructions, blockhash, fee, tip).await?;
+        let signatures = self.endpoint.build_and_broadcast_tx(&payer, instructions, blockhash, fee, tip).await?;
 
         Ok(signatures)
     }
@@ -256,7 +256,7 @@ impl DexTrait for Pumpfun {
             },
         )?;
         let instructions = build_buy_instructions(payer, mint, instruction)?;
-        let signatures = self.endpoint.send_transactions(payer, instructions, blockhash, fee, tip).await?;
+        let signatures = self.endpoint.build_and_broadcast_tx(payer, instructions, blockhash, fee, tip).await?;
 
         Ok(signatures)
     }
@@ -309,7 +309,7 @@ impl DexTrait for Pumpfun {
         let creator_vault = Self::get_creator_vault_pda(creator).unwrap();
         let instruction = self.build_sell_instruction(payer, mint, &pool, &creator_vault, Sell { token_amount, sol_amount })?;
         let instructions = build_sell_instructions(payer, mint, instruction, close_mint_ata)?;
-        let signatures = self.endpoint.send_transactions(payer, instructions, blockhash, fee, tip).await?;
+        let signatures = self.endpoint.build_and_broadcast_tx(payer, instructions, blockhash, fee, tip).await?;
 
         Ok(signatures)
     }

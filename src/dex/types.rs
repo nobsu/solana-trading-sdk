@@ -1,4 +1,4 @@
-use super::{dex_traits::DexTrait, pumpswap};
+use super::{dex_traits::DexTrait, pumpfun, pumpswap};
 use crate::common::trading_endpoint::TradingEndpoint;
 use solana_client::nonblocking::rpc_client::RpcClient;
 use solana_sdk::pubkey::Pubkey;
@@ -36,7 +36,7 @@ impl DexType {
 
     pub fn instantiate(&self, endpoint: Arc<TradingEndpoint>) -> Arc<dyn DexTrait> {
         match self {
-            DexType::Pumpfun => Arc::new(pumpswap::PumpSwap::new(endpoint)),
+            DexType::Pumpfun => Arc::new(pumpfun::Pumpfun::new(endpoint)),
             DexType::PumpSwap => Arc::new(pumpswap::PumpSwap::new(endpoint)),
         }
     }

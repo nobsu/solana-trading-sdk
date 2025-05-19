@@ -20,7 +20,7 @@ impl TradingEndpoint {
         Self { rpc, swqos }
     }
 
-    pub async fn send_transactions(
+    pub async fn build_and_broadcast_tx(
         &self,
         payer: &Keypair,
         instructions: Vec<Instruction>,
@@ -39,6 +39,7 @@ impl TradingEndpoint {
                     })
                 } else {
                     // If no tip is provided, skip this Tip-SWQoS
+                    println!("No tip provided for SWQoS: {}", swqos.get_name());
                     continue;
                 }
             } else {
@@ -50,7 +51,11 @@ impl TradingEndpoint {
             tasks.push(swqos.send_transaction(tx));
         }
 
-        futures::future::try_join_all(tasks).await?;
+        let result = futures::future::join_all(tasks).await;
+        let errors = result.into_iter().filter_map(|res| res.err()).collect::<Vec<_>>();
+        if errors.len() > 0 {
+            return Err(anyhow::anyhow!("{:?}", errors));
+        }
 
         Ok(signatures)
     }

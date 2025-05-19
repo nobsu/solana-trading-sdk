@@ -1,4 +1,7 @@
-use super::{swqos_rpc::SWQoSClientTrait, SWQoSTrait};
+use super::{
+    swqos_rpc::{SWQoSClientTrait, SWQoSRequest},
+    SWQoSTrait,
+};
 use crate::swqos::swqos_rpc::FormatBase64VersionedTransaction;
 use rand::seq::IndexedRandom;
 use solana_client::nonblocking::rpc_client::RpcClient;
@@ -41,7 +44,12 @@ pub struct JitoClient {
 impl SWQoSTrait for JitoClient {
     async fn send_transaction(&self, transaction: VersionedTransaction) -> anyhow::Result<()> {
         self.swqos_client
-            .send_swqos_transaction(&format!("{}/api/v1/transactions", self.swqos_endpoint), None, &transaction)
+            .swqos_send_transaction(SWQoSRequest {
+                name: self.get_name().to_string(),
+                url: format!("{}/api/v1/transactions", self.swqos_endpoint),
+                auth_header: None,
+                transactions: vec![transaction],
+            })
             .await
     }
 
@@ -58,14 +66,16 @@ impl SWQoSTrait for JitoClient {
         });
 
         self.swqos_client
-            .json_post(&format!("{}/api/v1/bundles", self.swqos_endpoint), None, body)
-            .await?;
-
-        println!(
-            "Transaction batch sent successfully: jito {}",
-            transactions.iter().map(|tx| tx.signatures[0].to_string()).collect::<Vec<_>>().join(", ")
-        );
-        Ok(())
+            .swqos_json_post(
+                SWQoSRequest {
+                    name: self.get_name().to_string(),
+                    url: format!("{}/api/v1/bundles", self.swqos_endpoint),
+                    auth_header: None,
+                    transactions: transactions,
+                },
+                body,
+            )
+            .await
     }
 
     fn get_tip_account(&self) -> Option<Pubkey> {

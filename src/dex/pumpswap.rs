@@ -114,7 +114,7 @@ impl DexTrait for PumpSwap {
     ) -> anyhow::Result<Vec<Signature>> {
         let instruction = self.build_buy_instruction(payer, mint, &pool, buy_token_amount, sol_lamports)?;
         let instructions = build_wsol_buy_instructions(payer, mint, sol_lamports, instruction)?;
-        let signatures = self.endpoint.send_transactions(payer, instructions, blockhash, fee, tip).await?;
+        let signatures = self.endpoint.build_and_broadcast_tx(payer, instructions, blockhash, fee, tip).await?;
 
         Ok(signatures)
     }
@@ -165,7 +165,7 @@ impl DexTrait for PumpSwap {
     ) -> anyhow::Result<Vec<Signature>> {
         let instruction = self.build_sell_instruction(payer, mint, &pool, token_amount, sol_lamports)?;
         let instructions = build_wsol_sell_instructions(payer, mint, close_mint_ata, instruction)?;
-        let signatures = self.endpoint.send_transactions(payer, instructions, blockhash, fee, tip).await?;
+        let signatures = self.endpoint.build_and_broadcast_tx(payer, instructions, blockhash, fee, tip).await?;
 
         Ok(signatures)
     }
@@ -265,6 +265,8 @@ impl PumpSwap {
     }
 
     pub fn build_sell_instruction(&self, payer: &Keypair, mint: &Pubkey, pool: &Pubkey, token_amount: u64, min_sol_out: u64) -> anyhow::Result<Instruction> {
+        self.initialized()?;
+
         let mut data = Vec::with_capacity(8 + 8 + 8);
         data.extend_from_slice(&[51, 230, 133, 164, 1, 127, 131, 173]); // discriminator
         data.extend_from_slice(&token_amount.to_le_bytes());

@@ -1,4 +1,4 @@
-use super::SWQoSTrait;
+use super::{swqos_rpc::SWQoSRequest, SWQoSTrait};
 use crate::swqos::swqos_rpc::SWQoSClientTrait;
 use base64::{engine::general_purpose, Engine};
 use rand::seq::IndexedRandom;
@@ -24,7 +24,7 @@ pub const NEXTBLOCK_ENDPOINT_NY: &str = "https://ny.nextblock.io";
 pub struct NextBlockClient {
     pub rpc_client: Arc<RpcClient>,
     pub swqos_endpoint: String,
-    pub swqos_header: (String, String),
+    pub swqos_header: Option<(String, String)>,
     pub swqos_client: Arc<reqwest::Client>,
 }
 
@@ -41,8 +41,17 @@ impl SWQoSTrait for NextBlockClient {
         });
 
         let url = format!("{}/api/v2/submit", self.swqos_endpoint);
-        self.swqos_client.json_post(&url, Some(self.swqos_header.clone()), body).await?;
-        Ok(())
+        self.swqos_client
+            .swqos_json_post(
+                SWQoSRequest {
+                    name: self.get_name().to_string(),
+                    url: url.clone(),
+                    auth_header: self.swqos_header.clone(),
+                    transactions: vec![transaction],
+                },
+                body,
+            )
+            .await
     }
 
     async fn send_transactions(&self, transactions: Vec<VersionedTransaction>) -> anyhow::Result<()> {
@@ -62,8 +71,17 @@ impl SWQoSTrait for NextBlockClient {
         });
 
         let url = format!("{}/api/v2/submit-batch", self.swqos_endpoint);
-        self.swqos_client.json_post(&url, Some(self.swqos_header.clone()), body).await?;
-        Ok(())
+        self.swqos_client
+            .swqos_json_post(
+                SWQoSRequest {
+                    name: self.get_name().to_string(),
+                    url: url.clone(),
+                    auth_header: self.swqos_header.clone(),
+                    transactions,
+                },
+                body,
+            )
+            .await
     }
 
     fn get_tip_account(&self) -> Option<Pubkey> {
@@ -82,7 +100,7 @@ impl NextBlockClient {
         Self {
             rpc_client,
             swqos_endpoint: endpoint,
-            swqos_header: ("Authorization".to_string(), auth_token),
+            swqos_header: Some(("Authorization".to_string(), auth_token)),
             swqos_client: Arc::new(swqos_client),
         }
     }

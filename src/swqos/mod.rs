@@ -9,10 +9,12 @@ pub mod zeroslot;
 use blox::BloxClient;
 use default::DefaultSWQoSClient;
 use jito::JitoClient;
-use nextblock::{NextBlockClient, NEXTBLOCK_TIP_ACCOUNTS};
+use nextblock::NextBlockClient;
 use solana_client::nonblocking::rpc_client::RpcClient;
 use solana_sdk::{pubkey::Pubkey, transaction::VersionedTransaction};
 use std::{any::Any, sync::Arc};
+use temporal::TEMPORAL_TIP_ACCOUNTS;
+use zeroslot::ZEROSLOT_TIP_ACCOUNTS;
 
 // (endpoint, auth_token)
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -43,17 +45,17 @@ impl SWQoSType {
             SWQoSType::ZeroSlot(endpoint, auth_token) => Arc::new(DefaultSWQoSClient::new(
                 "0slot",
                 rpc_client,
-                format!("{}/api-key={}", endpoint, auth_token),
+                format!("{}?api-key={}", endpoint, auth_token),
                 None,
-                NEXTBLOCK_TIP_ACCOUNTS.into(),
+                ZEROSLOT_TIP_ACCOUNTS.into(),
             )),
 
             SWQoSType::Temporal(endpoint, auth_token) => Arc::new(DefaultSWQoSClient::new(
                 "temporal",
                 rpc_client,
-                format!("{}/c={}", endpoint, auth_token),
+                format!("{}?c={}", endpoint, auth_token),
                 None,
-                NEXTBLOCK_TIP_ACCOUNTS.into(),
+                TEMPORAL_TIP_ACCOUNTS.into(),
             )),
         }
     }

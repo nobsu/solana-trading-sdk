@@ -8,8 +8,8 @@ pub const ZEROSLOT_TIP_ACCOUNTS: &[Pubkey] = &[
     pubkey!("Cix2bHfqPcKcM233mzxbLk14kSggUUiz2A87fJtGivXr"),
 ];
 
-pub const ZEROSLOT_ENDPOINT_FRA: &str = "https://de1.0slot.trade";
-pub const ZEROSLOT_ENDPOINT_NY: &str = "https://ny1.0slot.trade";
+pub const ZEROSLOT_ENDPOINT_FRA: &str = "https://de.0slot.trade";
+pub const ZEROSLOT_ENDPOINT_NY: &str = "https://ny.0slot.trade";
 pub const ZEROSLOT_ENDPOINT_AMS: &str = "https://ams.0slot.trade";
 pub const ZEROSLOT_ENDPOINT_TOKYO: &str = "https://jp.0slot.trade";
 pub const ZEROSLOT_ENDPOINT_LA: &str = "https://la.0slot.trade";

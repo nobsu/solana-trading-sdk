@@ -25,4 +25,11 @@ impl TradingClient {
 
         Ok(Self { endpoint, dexs })
     }
+
+    pub async fn initialize(&self) -> anyhow::Result<()> {
+        for (_, dex) in &self.dexs {
+            dex.initialize().await?;
+        }
+        Ok(())
+    }
 }
