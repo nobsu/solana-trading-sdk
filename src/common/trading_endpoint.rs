@@ -20,6 +20,11 @@ impl TradingEndpoint {
         Self { rpc, swqos }
     }
 
+    pub async fn get_latest_blockhash(&self) -> anyhow::Result<Hash> {
+        let blockhash = self.rpc.get_latest_blockhash().await?;
+        Ok(blockhash)
+    }
+
     pub async fn build_and_broadcast_tx(
         &self,
         payer: &Keypair,

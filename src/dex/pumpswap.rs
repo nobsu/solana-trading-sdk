@@ -1,6 +1,7 @@
 use super::{
     amm_calc::{amm_buy_get_token_out, amm_sell_get_sol_out, calculate_with_slippage_buy, calculate_with_slippage_sell},
     dex_traits::DexTrait,
+    pumpfun::PUBKEY_PUMPFUN,
     types::{Create, TokenAmountType},
 };
 use crate::{
@@ -11,11 +12,6 @@ use borsh::{BorshDeserialize, BorshSerialize};
 use once_cell::sync::OnceCell;
 use rand::seq::IndexedRandom;
 use serde::{Deserialize, Serialize};
-use solana_account_decoder::UiAccountEncoding;
-use solana_client::{
-    rpc_config::{RpcAccountInfoConfig, RpcProgramAccountsConfig},
-    rpc_filter::{Memcmp, MemcmpEncodedBytes, RpcFilterType},
-};
 use solana_sdk::{
     hash::Hash,
     instruction::{AccountMeta, Instruction},
@@ -41,7 +37,7 @@ pub struct GlobalAccount {
     pub protocol_fee_recipients: [Pubkey; 8],
 }
 
-#[derive(Debug, Clone, BorshSerialize, BorshDeserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PoolAccount {
     pub discriminator: u64,
     pub pool_bump: u8,
@@ -53,6 +49,12 @@ pub struct PoolAccount {
     pub pool_base_token_account: Pubkey,
     pub pool_quote_token_account: Pubkey,
     pub lp_supply: u64,
+}
+pub struct PoolInfo {
+    pub pool_address: Pubkey,
+    pub pool_account: PoolAccount,
+    pub pool_base_reserve: u64,
+    pub pool_quote_reserve: u64,
 }
 
 pub struct PumpSwap {
@@ -86,34 +88,45 @@ impl DexTrait for PumpSwap {
         &self,
         payer: &Keypair,
         mint: &Pubkey,
-        sol_lamports: u64,
+        sol_amount: u64,
         slippage_basis_points: u64,
         fee: Option<PriorityFee>,
         tip: Option<u64>,
     ) -> anyhow::Result<Vec<Signature>> {
-        let sol_lamports_with_slippage = calculate_with_slippage_buy(sol_lamports, slippage_basis_points);
-        let (pool, pool_base_reserve, pool_quote_reserve) = self.get_pool_liquidity(&mint).await?;
-        let blockhash = self.endpoint.rpc.get_latest_blockhash().await?;
-        let buy_token_amount = amm_buy_get_token_out(pool_quote_reserve, pool_base_reserve, sol_lamports);
+        let (pool_info, blockhash) = tokio::try_join!(self.get_pool(&mint), self.endpoint.get_latest_blockhash(),)?;
+        let buy_token_amount = amm_buy_get_token_out(pool_info.pool_quote_reserve, pool_info.pool_base_reserve, sol_amount);
+        let creator_valut = Self::get_creator_vault(&pool_info.pool_account.creator);
+        let sol_lamports_with_slippage = calculate_with_slippage_buy(sol_amount, slippage_basis_points);
 
-        self.buy_immediately(payer, mint, &pool, None, sol_lamports_with_slippage, buy_token_amount, blockhash, fee, tip)
-            .await
+        self.buy_immediately(
+            payer,
+            mint,
+            None,
+            Some(&creator_valut),
+            sol_lamports_with_slippage,
+            buy_token_amount,
+            blockhash,
+            fee,
+            tip,
+        )
+        .await
     }
 
     async fn buy_immediately(
         &self,
         payer: &Keypair,
         mint: &Pubkey,
-        pool: &Pubkey,
         _: Option<&Pubkey>,
-        sol_lamports: u64,
+        creator_vault: Option<&Pubkey>,
+        sol_amount: u64,
         buy_token_amount: u64,
         blockhash: Hash,
         fee: Option<PriorityFee>,
         tip: Option<u64>,
     ) -> anyhow::Result<Vec<Signature>> {
-        let instruction = self.build_buy_instruction(payer, mint, &pool, buy_token_amount, sol_lamports)?;
-        let instructions = build_wsol_buy_instructions(payer, mint, sol_lamports, instruction)?;
+        let creator_vault = creator_vault.ok_or(anyhow::anyhow!("creator vault not provided: {}", mint.to_string()))?;
+        let instruction = self.build_buy_instruction(payer, mint, &creator_vault, buy_token_amount, sol_amount)?;
+        let instructions = build_wsol_buy_instructions(payer, mint, sol_amount, instruction)?;
         let signatures = self.endpoint.build_and_broadcast_tx(payer, instructions, blockhash, fee, tip).await?;
 
         Ok(signatures)
@@ -129,17 +142,21 @@ impl DexTrait for PumpSwap {
         fee: Option<PriorityFee>,
         tip: Option<u64>,
     ) -> anyhow::Result<Vec<Signature>> {
-        let (pool, pool_base_reserve, pool_quote_reserve) = self.get_pool_liquidity(&mint).await?;
-        let blockhash = self.endpoint.rpc.get_latest_blockhash().await?;
-        let token_amount = token_amount.to_amount(self.endpoint.rpc.clone(), &payer.pubkey(), mint).await?;
-
-        let sol_lamports = amm_sell_get_sol_out(pool_quote_reserve, pool_base_reserve, token_amount);
+        let payer_pubkey = payer.pubkey();
+        let (pool_info, blockhash, token_amount) = tokio::try_join!(
+            self.get_pool(&mint),
+            self.endpoint.get_latest_blockhash(),
+            token_amount.to_amount(self.endpoint.rpc.clone(), &payer_pubkey, mint)
+        )?;
+        let creator_valut = Self::get_creator_vault(&pool_info.pool_account.creator);
+        let sol_lamports = amm_sell_get_sol_out(pool_info.pool_quote_reserve, pool_info.pool_base_reserve, token_amount);
         let sol_lamports_with_slippage = calculate_with_slippage_sell(sol_lamports, slippage_basis_points);
+
         self.sell_immediately(
             payer,
             mint,
-            &pool,
             None,
+            Some(&creator_valut),
             token_amount,
             sol_lamports_with_slippage,
             close_mint_ata,
@@ -154,16 +171,17 @@ impl DexTrait for PumpSwap {
         &self,
         payer: &Keypair,
         mint: &Pubkey,
-        pool: &Pubkey,
         _: Option<&Pubkey>,
+        creator_vault: Option<&Pubkey>,
         token_amount: u64,
-        sol_lamports: u64,
+        sol_amount: u64,
         close_mint_ata: bool,
         blockhash: Hash,
         fee: Option<PriorityFee>,
         tip: Option<u64>,
     ) -> anyhow::Result<Vec<Signature>> {
-        let instruction = self.build_sell_instruction(payer, mint, &pool, token_amount, sol_lamports)?;
+        let creator_vault = creator_vault.ok_or(anyhow::anyhow!("creator vault not provided: {}", mint.to_string()))?;
+        let instruction = self.build_sell_instruction(payer, mint, &creator_vault, token_amount, sol_amount)?;
         let instructions = build_wsol_sell_instructions(payer, mint, close_mint_ata, instruction)?;
         let signatures = self.endpoint.build_and_broadcast_tx(payer, instructions, blockhash, fee, tip).await?;
 
@@ -179,57 +197,68 @@ impl PumpSwap {
         }
     }
 
-    pub async fn get_pool_liquidity(&self, mint: &Pubkey) -> anyhow::Result<(Pubkey, u64, u64)> {
-        let (pool, pool_account) = self.get_pool(&mint).await?;
+    pub fn get_creator_vault(creator: &Pubkey) -> Pubkey {
+        Pubkey::find_program_address(&[b"creator_vault", creator.as_ref()], &PUBKEY_PUMPSWAP).0
+    }
 
-        let (pool_base_account, pool_quote_account) = tokio::try_join!(
-            self.endpoint.rpc.get_token_account(&pool_account.pool_base_token_account),
-            self.endpoint.rpc.get_token_account(&pool_account.pool_quote_token_account),
+    pub fn get_pool_authority_pda(mint: &Pubkey) -> Pubkey {
+        Pubkey::find_program_address(&[b"pool-authority", mint.as_ref()], &PUBKEY_PUMPFUN).0
+    }
+
+    pub fn get_pool_address(mint: &Pubkey) -> Pubkey {
+        println!("mint: {:?}", mint.to_string());
+        println!("pool_authority: {:?}", Self::get_pool_authority_pda(mint).to_string());
+        Pubkey::find_program_address(
+            &[
+                b"pool",
+                &0u16.to_le_bytes(),
+                Self::get_pool_authority_pda(mint).as_ref(),
+                mint.as_ref(),
+                PUBKEY_WSOL.as_ref(),
+            ],
+            &PUBKEY_PUMPSWAP,
+        )
+        .0
+    }
+
+    pub async fn get_pool(&self, mint: &Pubkey) -> anyhow::Result<PoolInfo> {
+        let pool = Self::get_pool_address(&mint);
+
+        let pool_base = get_associated_token_address(&pool, &mint);
+        let pool_quote = get_associated_token_address(&pool, &PUBKEY_WSOL);
+        let (pool_account, pool_base_account, pool_quote_account) = tokio::try_join!(
+            self.endpoint.rpc.get_account(&pool),
+            self.endpoint.rpc.get_token_account(&pool_base),
+            self.endpoint.rpc.get_token_account(&pool_quote),
         )?;
 
-        let pool_base_reserve = u64::from_str(&pool_base_account.unwrap().token_amount.amount)?;
-        let pool_quote_reserve = u64::from_str(&pool_quote_account.unwrap().token_amount.amount)?;
-        Ok((pool, pool_base_reserve, pool_quote_reserve))
-    }
-
-    pub async fn get_pool(&self, mint_address: &Pubkey) -> anyhow::Result<(Pubkey, PoolAccount)> {
-        let filters = vec![
-            RpcFilterType::DataSize(211),
-            RpcFilterType::Memcmp(Memcmp::new(43, MemcmpEncodedBytes::Base58(mint_address.to_string()))),
-            RpcFilterType::Memcmp(Memcmp::new(75, MemcmpEncodedBytes::Base58(PUBKEY_WSOL.to_string()))),
-        ];
-
-        let accounts = self
-            .endpoint
-            .rpc
-            .get_program_accounts_with_config(
-                &PUBKEY_PUMPSWAP,
-                RpcProgramAccountsConfig {
-                    filters: Some(filters),
-                    account_config: RpcAccountInfoConfig {
-                        encoding: Some(UiAccountEncoding::Base64),
-                        ..Default::default()
-                    },
-                    ..RpcProgramAccountsConfig::default()
-                },
-            )
-            .await?;
-
-        if accounts.is_empty() {
-            return Err(anyhow::anyhow!("No PumpSwap pools found"));
+        if pool_account.data.is_empty() {
+            return Err(anyhow::anyhow!("Pool account not found: {}", mint.to_string()));
         }
 
-        if accounts.len() > 1 {
-            return Err(anyhow::anyhow!("Too many PumpSwap pools found"));
-        }
+        let pool_account = bincode::deserialize::<PoolAccount>(&pool_account.data)?;
+        let pool_base_account = pool_base_account.ok_or_else(|| anyhow::anyhow!("Pool base account not found: {}", mint.to_string()))?;
+        let pool_quote_account = pool_quote_account.ok_or_else(|| anyhow::anyhow!("Pool quote account not found: {}", mint.to_string()))?;
 
-        let (pubkey, account) = &accounts[0];
-        let pool_data = PoolAccount::try_from_slice(&account.data)?;
+        let pool_base_reserve = u64::from_str(&pool_base_account.token_amount.amount)?;
+        let pool_quote_reserve = u64::from_str(&pool_quote_account.token_amount.amount)?;
 
-        Ok((pubkey.clone(), pool_data))
+        Ok(PoolInfo {
+            pool_address: pool,
+            pool_account,
+            pool_base_reserve,
+            pool_quote_reserve,
+        })
     }
 
-    fn build_buy_instruction(&self, payer: &Keypair, mint: &Pubkey, pool: &Pubkey, buy_token_amount: u64, max_sol_cost: u64) -> anyhow::Result<Instruction> {
+    fn build_buy_instruction(
+        &self,
+        payer: &Keypair,
+        mint: &Pubkey,
+        creator_vault: &Pubkey,
+        buy_token_amount: u64,
+        max_sol_cost: u64,
+    ) -> anyhow::Result<Instruction> {
         self.initialized()?;
 
         let mut data = Vec::with_capacity(8 + 8 + 8);
@@ -237,21 +266,23 @@ impl PumpSwap {
         data.extend_from_slice(&buy_token_amount.to_le_bytes());
         data.extend_from_slice(&max_sol_cost.to_le_bytes());
 
+        let pool = Self::get_pool_address(&mint);
+        let creator_vault_ata = get_associated_token_address(creator_vault, &PUBKEY_WSOL);
         let fee_recipient = self.global_account.get().unwrap().protocol_fee_recipients.choose(&mut rand::rng()).unwrap();
 
         Ok(Instruction::new_with_bytes(
             PUBKEY_PUMPSWAP,
             &data,
             vec![
-                AccountMeta::new_readonly(*pool, false),
+                AccountMeta::new_readonly(pool, false),
                 AccountMeta::new(payer.pubkey(), true),
                 AccountMeta::new_readonly(PUBKEY_GLOBAL_ACCOUNT, false),
                 AccountMeta::new_readonly(*mint, false),
                 AccountMeta::new_readonly(PUBKEY_WSOL, false),
                 AccountMeta::new(get_associated_token_address(&payer.pubkey(), mint), false),
                 AccountMeta::new(get_associated_token_address(&payer.pubkey(), &PUBKEY_WSOL), false),
-                AccountMeta::new(get_associated_token_address(pool, mint), false),
-                AccountMeta::new(get_associated_token_address(pool, &PUBKEY_WSOL), false),
+                AccountMeta::new(get_associated_token_address(&pool, mint), false),
+                AccountMeta::new(get_associated_token_address(&pool, &PUBKEY_WSOL), false),
                 AccountMeta::new_readonly(*fee_recipient, false),
                 AccountMeta::new(get_associated_token_address(fee_recipient, &PUBKEY_WSOL), false),
                 AccountMeta::new_readonly(spl_token::ID, false),
@@ -260,11 +291,20 @@ impl PumpSwap {
                 AccountMeta::new_readonly(spl_associated_token_account::ID, false),
                 AccountMeta::new_readonly(PUBKEY_EVENT_AUTHORITY, false),
                 AccountMeta::new_readonly(PUBKEY_PUMPSWAP, false),
+                AccountMeta::new_readonly(creator_vault_ata, true),
+                AccountMeta::new_readonly(*creator_vault, false),
             ],
         ))
     }
 
-    pub fn build_sell_instruction(&self, payer: &Keypair, mint: &Pubkey, pool: &Pubkey, token_amount: u64, min_sol_out: u64) -> anyhow::Result<Instruction> {
+    pub fn build_sell_instruction(
+        &self,
+        payer: &Keypair,
+        mint: &Pubkey,
+        creator_vault: &Pubkey,
+        token_amount: u64,
+        min_sol_out: u64,
+    ) -> anyhow::Result<Instruction> {
         self.initialized()?;
 
         let mut data = Vec::with_capacity(8 + 8 + 8);
@@ -272,21 +312,23 @@ impl PumpSwap {
         data.extend_from_slice(&token_amount.to_le_bytes());
         data.extend_from_slice(&min_sol_out.to_le_bytes());
 
+        let pool = Self::get_pool_address(&mint);
+        let creator_vault_ata = get_associated_token_address(creator_vault, &PUBKEY_WSOL);
         let fee_recipient = self.global_account.get().unwrap().protocol_fee_recipients.choose(&mut rand::rng()).unwrap();
 
         Ok(Instruction::new_with_bytes(
             PUBKEY_PUMPSWAP,
             &data,
             vec![
-                AccountMeta::new_readonly(*pool, false),
+                AccountMeta::new_readonly(pool, false),
                 AccountMeta::new(payer.pubkey(), true),
                 AccountMeta::new_readonly(PUBKEY_GLOBAL_ACCOUNT, false),
                 AccountMeta::new_readonly(*mint, false),
                 AccountMeta::new_readonly(PUBKEY_WSOL, false),
                 AccountMeta::new(get_associated_token_address(&payer.pubkey(), mint), false),
                 AccountMeta::new(get_associated_token_address(&payer.pubkey(), &PUBKEY_WSOL), false),
-                AccountMeta::new(get_associated_token_address(pool, mint), false),
-                AccountMeta::new(get_associated_token_address(pool, &PUBKEY_WSOL), false),
+                AccountMeta::new(get_associated_token_address(&pool, mint), false),
+                AccountMeta::new(get_associated_token_address(&pool, &PUBKEY_WSOL), false),
                 AccountMeta::new_readonly(*fee_recipient, false),
                 AccountMeta::new(get_associated_token_address(fee_recipient, &PUBKEY_WSOL), false),
                 AccountMeta::new_readonly(spl_token::ID, false),
@@ -295,6 +337,8 @@ impl PumpSwap {
                 AccountMeta::new_readonly(spl_associated_token_account::ID, false),
                 AccountMeta::new_readonly(PUBKEY_EVENT_AUTHORITY, false),
                 AccountMeta::new_readonly(PUBKEY_PUMPSWAP, false),
+                AccountMeta::new_readonly(creator_vault_ata, true),
+                AccountMeta::new_readonly(*creator_vault, false),
             ],
         ))
     }

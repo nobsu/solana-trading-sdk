@@ -180,11 +180,9 @@ impl DexTrait for Pumpfun {
         if let Some(buy_sol_amount) = buy_sol_amount {
             let buy_token_amount = amm_buy_get_token_out(INITIAL_VIRTUAL_SOL_RESERVES, INITIAL_VIRTUAL_TOKEN_RESERVES, buy_sol_amount);
             let creator_vault = Self::get_creator_vault_pda(&payer.pubkey()).unwrap();
-            let bonding_curve = Self::get_bonding_curve_pda(&mint).ok_or(anyhow::anyhow!("Bonding curve not found"))?;
             let buy_instruction = self.build_buy_instruction(
                 &payer,
                 &mint,
-                &bonding_curve,
                 &creator_vault,
                 Buy {
                     token_amount: buy_token_amount,
@@ -209,19 +207,16 @@ impl DexTrait for Pumpfun {
         tip: Option<u64>,
     ) -> anyhow::Result<Vec<Signature>> {
         let sol_lamports_with_slippage = calculate_with_slippage_buy(sol_lamports, slippage_basis_points);
-        let (bonding_curve, bonding_curve_account) = self.get_bonding_curve(&mint).await?;
+        let (_, pool_account) = self.get_pool(&mint).await?;
         let blockhash = self.endpoint.rpc.get_latest_blockhash().await?;
-        let buy_token_amount = amm_buy_get_token_out(
-            bonding_curve_account.virtual_sol_reserves,
-            bonding_curve_account.virtual_token_reserves,
-            sol_lamports,
-        );
+        let buy_token_amount = amm_buy_get_token_out(pool_account.virtual_sol_reserves, pool_account.virtual_token_reserves, sol_lamports);
+        let creator_vault = Self::get_creator_vault_pda(&pool_account.creator).ok_or(anyhow::anyhow!("Creator vault not found: {}", mint.to_string()))?;
 
         self.buy_immediately(
             payer,
             mint,
-            &bonding_curve,
-            Some(&bonding_curve_account.creator),
+            None,
+            Some(&creator_vault),
             sol_lamports_with_slippage,
             buy_token_amount,
             blockhash,
@@ -235,20 +230,18 @@ impl DexTrait for Pumpfun {
         &self,
         payer: &Keypair,
         mint: &Pubkey,
-        pool: &Pubkey,
-        creator: Option<&Pubkey>,
+        _: Option<&Pubkey>,
+        creator_vault: Option<&Pubkey>,
         sol_amount: u64,
         buy_token_amount: u64,
         blockhash: Hash,
         fee: Option<PriorityFee>,
         tip: Option<u64>,
     ) -> anyhow::Result<Vec<Signature>> {
-        let creator = creator.ok_or(anyhow::anyhow!("Creator not provided"))?;
-        let creator_vault = Self::get_creator_vault_pda(creator).unwrap();
+        let creator_vault = creator_vault.ok_or(anyhow::anyhow!("creator vault not provided: {}", mint.to_string()))?;
         let instruction = self.build_buy_instruction(
             payer,
             mint,
-            &pool,
             &creator_vault,
             Buy {
                 token_amount: buy_token_amount,
@@ -271,17 +264,18 @@ impl DexTrait for Pumpfun {
         fee: Option<PriorityFee>,
         tip: Option<u64>,
     ) -> anyhow::Result<Vec<Signature>> {
-        let (pool, pool_account) = self.get_bonding_curve(&mint).await?;
+        let (_, pool_account) = self.get_pool(&mint).await?;
         let blockhash = self.endpoint.rpc.get_latest_blockhash().await?;
         let token_amount = token_amount.to_amount(self.endpoint.rpc.clone(), &payer.pubkey(), mint).await?;
         let sol_lamports = amm_sell_get_sol_out(pool_account.virtual_sol_reserves, pool_account.virtual_token_reserves, token_amount);
         let sol_lamports_with_slippage = calculate_with_slippage_sell(sol_lamports, slippage_basis_points);
+        let creator_vault = Self::get_creator_vault_pda(&pool_account.creator).ok_or(anyhow::anyhow!("Creator vault not found: {}", mint.to_string()))?;
 
         self.sell_immediately(
             payer,
             mint,
-            &pool,
-            Some(&pool_account.creator),
+            None,
+            Some(&creator_vault),
             token_amount,
             sol_lamports_with_slippage,
             close_mint_ata,
@@ -296,8 +290,8 @@ impl DexTrait for Pumpfun {
         &self,
         payer: &Keypair,
         mint: &Pubkey,
-        pool: &Pubkey,
-        creator: Option<&Pubkey>,
+        _: Option<&Pubkey>,
+        creator_vault: Option<&Pubkey>,
         token_amount: u64,
         sol_amount: u64,
         close_mint_ata: bool,
@@ -305,9 +299,8 @@ impl DexTrait for Pumpfun {
         fee: Option<PriorityFee>,
         tip: Option<u64>,
     ) -> anyhow::Result<Vec<Signature>> {
-        let creator = creator.ok_or(anyhow::anyhow!("Creator not provided"))?;
-        let creator_vault = Self::get_creator_vault_pda(creator).unwrap();
-        let instruction = self.build_sell_instruction(payer, mint, &pool, &creator_vault, Sell { token_amount, sol_amount })?;
+        let creator_vault = creator_vault.ok_or(anyhow::anyhow!("creator vault not provided: {}", mint.to_string()))?;
+        let instruction = self.build_sell_instruction(payer, mint, creator_vault, Sell { token_amount, sol_amount })?;
         let instructions = build_sell_instructions(payer, mint, instruction, close_mint_ata)?;
         let signatures = self.endpoint.build_and_broadcast_tx(payer, instructions, blockhash, fee, tip).await?;
 
@@ -337,11 +330,11 @@ impl Pumpfun {
         Some(pda.0)
     }
 
-    pub async fn get_bonding_curve(&self, mint: &Pubkey) -> anyhow::Result<(Pubkey, BondingCurveAccount)> {
+    pub async fn get_pool(&self, mint: &Pubkey) -> anyhow::Result<(Pubkey, BondingCurveAccount)> {
         let bonding_curve_pda = Self::get_bonding_curve_pda(mint).unwrap();
         let account = self.endpoint.rpc.get_account(&bonding_curve_pda).await?;
         if account.data.is_empty() {
-            return Err(anyhow::anyhow!("Bonding curve not found"));
+            return Err(anyhow::anyhow!("Bonding curve not found: {}", mint.to_string()));
         }
 
         let bonding_curve = bincode::deserialize::<BondingCurveAccount>(&account.data)?;
@@ -349,13 +342,14 @@ impl Pumpfun {
         Ok((bonding_curve_pda, bonding_curve))
     }
 
-    fn build_buy_instruction(&self, payer: &Keypair, mint: &Pubkey, bonding_curve: &Pubkey, creator_vault: &Pubkey, buy: Buy) -> anyhow::Result<Instruction> {
+    fn build_buy_instruction(&self, payer: &Keypair, mint: &Pubkey, creator_vault: &Pubkey, buy: Buy) -> anyhow::Result<Instruction> {
         self.initialized()?;
 
         let buy_info: BuyInfo = buy.into();
         let mut buffer = Vec::new();
         buy_info.serialize(&mut buffer)?;
 
+        let bonding_curve = Self::get_bonding_curve_pda(mint).ok_or(anyhow::anyhow!("Bonding curve not found: {}", mint.to_string()))?;
         Ok(Instruction::new_with_bytes(
             PUBKEY_PUMPFUN,
             &buffer,
@@ -363,8 +357,8 @@ impl Pumpfun {
                 AccountMeta::new_readonly(PUBKEY_GLOBAL_ACCOUNT, false),
                 AccountMeta::new(PUBKEY_FEE_RECIPIENT, false),
                 AccountMeta::new_readonly(*mint, false),
-                AccountMeta::new(*bonding_curve, false),
-                AccountMeta::new(get_associated_token_address(bonding_curve, mint), false),
+                AccountMeta::new(bonding_curve, false),
+                AccountMeta::new(get_associated_token_address(&bonding_curve, mint), false),
                 AccountMeta::new(get_associated_token_address(&payer.pubkey(), mint), false),
                 AccountMeta::new(payer.pubkey(), true),
                 AccountMeta::new_readonly(solana_program::system_program::ID, false),
@@ -376,18 +370,12 @@ impl Pumpfun {
         ))
     }
 
-    pub fn build_sell_instruction(
-        &self,
-        payer: &Keypair,
-        mint: &Pubkey,
-        bonding_curve: &Pubkey,
-        creator_vault: &Pubkey,
-        sell: Sell,
-    ) -> anyhow::Result<Instruction> {
+    pub fn build_sell_instruction(&self, payer: &Keypair, mint: &Pubkey, creator_vault: &Pubkey, sell: Sell) -> anyhow::Result<Instruction> {
         let sell_info: SellInfo = sell.into();
         let mut buffer = Vec::new();
         sell_info.serialize(&mut buffer)?;
 
+        let bonding_curve = Self::get_bonding_curve_pda(mint).ok_or(anyhow::anyhow!("Bonding curve not found: {}", mint.to_string()))?;
         Ok(Instruction::new_with_bytes(
             PUBKEY_PUMPFUN,
             &buffer,
@@ -395,7 +383,7 @@ impl Pumpfun {
                 AccountMeta::new_readonly(PUBKEY_GLOBAL_ACCOUNT, false),
                 AccountMeta::new(PUBKEY_FEE_RECIPIENT, false),
                 AccountMeta::new_readonly(*mint, false),
-                AccountMeta::new(*bonding_curve, false),
+                AccountMeta::new(bonding_curve, false),
                 AccountMeta::new(get_associated_token_address(&bonding_curve, mint), false),
                 AccountMeta::new(get_associated_token_address(&payer.pubkey(), mint), false),
                 AccountMeta::new(payer.pubkey(), true),
