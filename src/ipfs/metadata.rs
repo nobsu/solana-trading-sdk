@@ -29,10 +29,10 @@ pub async fn create_token_metadata(metadata: CreateTokenMetadata, jwt_token: &st
         website: metadata.website,
     };
 
-    if metadata.metadata_uri.is_some() {
+    if let Some(metadata_uri) = metadata.metadata_uri {
         let token_metadata_ipfs = TokenMetadataIPFS {
             metadata: token_metadata,
-            metadata_uri: metadata.metadata_uri.unwrap(),
+            metadata_uri: metadata_uri,
         };
         Ok(token_metadata_ipfs)
     } else {

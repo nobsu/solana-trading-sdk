@@ -29,17 +29,6 @@ pub struct TipFee {
     pub tip_lamports: u64,
 }
 
-// pub fn build_compute_unit_instruction(cu_price: u64, cu_limit: u64) -> Vec<Instruction> {
-//     vec![
-//         ComputeBudgetInstruction::set_compute_unit_price(cu_price),
-//         ComputeBudgetInstruction::set_compute_unit_limit(cu_limit as u32),
-//     ]
-// }
-
-// pub fn build_system_transfer_instruction(from: &Pubkey, to: &Pubkey, lamports: u64) -> Instruction {
-//     system_instruction::transfer(from, to, lamports)
-// }
-
 pub fn build_transaction(
     payer: &Keypair,
     instructions: Vec<Instruction>,
@@ -69,45 +58,24 @@ pub fn build_transaction(
 pub fn build_buy_instructions(payer: &Keypair, mint: &Pubkey, buy_instruction: Instruction) -> anyhow::Result<Vec<Instruction>> {
     let mut instructions = vec![];
 
-    instructions.push(create_associated_token_account(
-        &payer.pubkey(),
-        &payer.pubkey(),
-        &mint,
-        &spl_token::ID,
-    ));
+    instructions.push(create_associated_token_account(&payer.pubkey(), &payer.pubkey(), &mint, &spl_token::ID));
     instructions.push(buy_instruction);
 
     Ok(instructions)
 }
 
-pub fn build_sell_instructions(
-    payer: &Keypair,
-    mint: &Pubkey,
-    sell_instruction: Instruction,
-    close_mint_ata: bool,
-) -> Result<Vec<Instruction>, anyhow::Error> {
+pub fn build_sell_instructions(payer: &Keypair, mint: &Pubkey, sell_instruction: Instruction, close_mint_ata: bool) -> Result<Vec<Instruction>, anyhow::Error> {
     let mut instructions = vec![sell_instruction];
 
     if close_mint_ata {
         let mint_ata = get_associated_token_address(&payer.pubkey(), &mint);
-        instructions.push(close_account(
-            &spl_token::ID,
-            &mint_ata,
-            &payer.pubkey(),
-            &payer.pubkey(),
-            &[&payer.pubkey()],
-        )?);
+        instructions.push(close_account(&spl_token::ID, &mint_ata, &payer.pubkey(), &payer.pubkey(), &[&payer.pubkey()])?);
     }
 
     Ok(instructions)
 }
 
-pub fn build_wsol_buy_instructions(
-    payer: &Keypair,
-    mint: &Pubkey,
-    amount_sol: u64,
-    buy_instruction: Instruction,
-) -> anyhow::Result<Vec<Instruction>> {
+pub fn build_wsol_buy_instructions(payer: &Keypair, mint: &Pubkey, amount_sol: u64, buy_instruction: Instruction) -> anyhow::Result<Vec<Instruction>> {
     let mut instructions = vec![];
 
     instructions.push(create_associated_token_account_idempotent(
@@ -136,12 +104,7 @@ pub fn build_wsol_buy_instructions(
     Ok(instructions)
 }
 
-pub fn build_wsol_sell_instructions(
-    payer: &Keypair,
-    mint: &Pubkey,
-    close_mint_ata: bool,
-    sell_instruction: Instruction,
-) -> anyhow::Result<Vec<Instruction>> {
+pub fn build_wsol_sell_instructions(payer: &Keypair, mint: &Pubkey, close_mint_ata: bool, sell_instruction: Instruction) -> anyhow::Result<Vec<Instruction>> {
     let mint_ata = get_associated_token_address(&payer.pubkey(), &mint);
     let wsol_ata = get_associated_token_address(&payer.pubkey(), &PUBKEY_WSOL);
 

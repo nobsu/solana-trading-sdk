@@ -2,9 +2,11 @@ use super::{
     swqos_rpc::{SWQoSClientTrait, SWQoSRequest},
     SWQoSTrait,
 };
+use crate::instruction::builder::{build_transaction, PriorityFee};
 use rand::seq::IndexedRandom;
 use solana_client::nonblocking::rpc_client::RpcClient;
-use solana_sdk::{pubkey::Pubkey, transaction::VersionedTransaction};
+use solana_sdk::{pubkey::Pubkey, signature::Keypair, signer::Signer, transaction::VersionedTransaction};
+use spl_associated_token_account::get_associated_token_address;
 use std::sync::Arc;
 
 #[derive(Clone)]
@@ -50,6 +52,11 @@ impl SWQoSTrait for DefaultSWQoSClient {
     }
 }
 
+pub struct TransferInfo {
+    pub to: Pubkey,
+    pub amount: u64,
+}
+
 impl DefaultSWQoSClient {
     pub fn new(name: &str, rpc_client: Arc<RpcClient>, endpoint: String, header: Option<(String, String)>, tip_accounts: Vec<Pubkey>) -> Self {
         let swqos_client = reqwest::Client::new_swqos_client();
@@ -62,5 +69,45 @@ impl DefaultSWQoSClient {
             swqos_header: header,
             swqos_client: Arc::new(swqos_client),
         }
+    }
+
+    pub async fn transfer(&self, from: &Keypair, to: &Pubkey, amount: u64, fee: Option<PriorityFee>) -> anyhow::Result<()> {
+        let blockhash = self.rpc_client.get_latest_blockhash().await?;
+        let instruction = solana_sdk::system_instruction::transfer(&from.pubkey(), to, amount);
+        let transaction = build_transaction(from, vec![instruction], blockhash, fee, None)?;
+        self.send_transaction(transaction).await
+    }
+
+    pub async fn batch_transfer(&self, from: &Keypair, to: Vec<TransferInfo>, fee: Option<PriorityFee>) -> anyhow::Result<()> {
+        let blockhash = self.rpc_client.get_latest_blockhash().await?;
+        let instructions = to
+            .iter()
+            .map(|transfer| solana_sdk::system_instruction::transfer(&from.pubkey(), &transfer.to, transfer.amount))
+            .collect::<Vec<_>>();
+        let transaction = build_transaction(from, instructions, blockhash, fee, None)?;
+        self.send_transaction(transaction).await
+    }
+
+    pub async fn spl_transfer(&self, from: &Keypair, to: &Pubkey, mint: &Pubkey, amount: u64, fee: Option<PriorityFee>) -> anyhow::Result<()> {
+        let blockhash = self.rpc_client.get_latest_blockhash().await?;
+        let from_ata = get_associated_token_address(&from.pubkey(), mint);
+        let to_ata = get_associated_token_address(to, mint);
+        let instruction = spl_token::instruction::transfer(&spl_token::ID, &from_ata, &to_ata, &from.pubkey(), &[], amount)?;
+        let transaction = build_transaction(from, vec![instruction], blockhash, fee, None)?;
+        self.send_transaction(transaction).await
+    }
+
+    pub async fn spl_batch_transfer(&self, from: &Keypair, to: Vec<TransferInfo>, mint: &Pubkey, fee: Option<PriorityFee>) -> anyhow::Result<()> {
+        let blockhash = self.rpc_client.get_latest_blockhash().await?;
+        let from_ata = get_associated_token_address(&from.pubkey(), mint);
+        let instructions = to
+            .iter()
+            .map(|transfer| {
+                let to_ata = get_associated_token_address(&transfer.to, mint);
+                spl_token::instruction::transfer(&spl_token::ID, &from_ata, &to_ata, &from.pubkey(), &[], transfer.amount)
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+        let transaction = build_transaction(from, instructions, blockhash, fee, None)?;
+        self.send_transaction(transaction).await
     }
 }

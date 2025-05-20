@@ -21,6 +21,7 @@ pub struct Create {
     pub uri: String,
     pub mint: Pubkey,
     pub buy_sol_amount: Option<u64>,
+    pub slippage_basis_points: Option<u64>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]

@@ -113,6 +113,8 @@ impl DexTrait for Pumpfun {
     async fn create(&self, payer: Keypair, create: Create, fee: Option<PriorityFee>, tip: Option<u64>) -> anyhow::Result<Vec<Signature>> {
         let mint = create.mint;
         let buy_sol_amount = create.buy_sol_amount;
+        let slippage_basis_points = create.slippage_basis_points.unwrap_or(0);
+
         let create_info = CreateInfo::from_create(create, payer.pubkey());
         let mut buffer = Vec::new();
         create_info.serialize(&mut buffer)?;
@@ -146,6 +148,7 @@ impl DexTrait for Pumpfun {
 
         if let Some(buy_sol_amount) = buy_sol_amount {
             let buy_token_amount = amm_buy_get_token_out(INITIAL_VIRTUAL_SOL_RESERVES, INITIAL_VIRTUAL_TOKEN_RESERVES, buy_sol_amount);
+            let buy_token_amount = calculate_with_slippage_buy(buy_token_amount, slippage_basis_points);
             let creator_vault = Self::get_creator_vault_pda(&payer.pubkey()).unwrap();
             let buy_instruction = self.build_buy_instruction(
                 &payer,
@@ -340,7 +343,7 @@ impl Pumpfun {
 
     pub fn build_sell_instruction(&self, payer: &Keypair, mint: &Pubkey, creator_vault: &Pubkey, sell: Sell) -> anyhow::Result<Instruction> {
         self.initialized()?;
-   
+
         let sell_info: SellInfo = sell.into();
         let buffer = sell_info.to_buffer()?;
         let bonding_curve = Self::get_bonding_curve_pda(mint).ok_or(anyhow::anyhow!("Bonding curve not found: {}", mint.to_string()))?;
