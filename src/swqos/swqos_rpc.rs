@@ -79,20 +79,20 @@ impl SWQoSClientTrait for reqwest::Client {
         let http_status = response.status();
         let response_body = timeout(SWQOS_RPC_TIMEOUT, response.text()).await??;
 
-        if http_status != 200 {
+        if !http_status.is_success() {
             let error = format!("swqos_json_post error: {} {} {} {}", request.name, txs_hash, http_status, response_body);
-            println!("{}", error);
+            eprintln!("{}", error);
             return Err(anyhow::anyhow!(error));
         }
 
         let response_json = serde_json::Value::from_str(&response_body)?;
         if let Some(error) = response_json.get("error") {
             let error = format!("swqos_json_post error: {} {} {} {}", request.name, txs_hash, http_status, error.to_string());
-            println!("{}", error);
+            eprintln!("{}", error);
             return Err(anyhow::anyhow!(error));
         }
 
-        println!("swqos_json_post success: {} {}", request.name, txs_hash);
+        eprintln!("swqos_json_post success: {} {}", request.name, txs_hash);
 
         Ok(())
     }

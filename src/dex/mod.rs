@@ -3,3 +3,4 @@ pub mod dex_traits;
 pub mod pumpfun;
 pub mod pumpswap;
 pub mod types;
+pub mod pumpfun_types;

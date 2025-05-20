@@ -44,7 +44,7 @@ impl TradingEndpoint {
                     })
                 } else {
                     // If no tip is provided, skip this Tip-SWQoS
-                    println!("No tip provided for SWQoS: {}", swqos.get_name());
+                    eprintln!("No tip provided for SWQoS: {}", swqos.get_name());
                     continue;
                 }
             } else {

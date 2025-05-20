@@ -2,7 +2,8 @@ use super::{
     amm_calc::{amm_buy_get_token_out, amm_sell_get_sol_out, calculate_with_slippage_buy, calculate_with_slippage_sell},
     dex_traits::DexTrait,
     pumpfun::PUBKEY_PUMPFUN,
-    types::{Create, TokenAmountType},
+    pumpfun_types::{BuyInfo, SellInfo},
+    types::{Buy, Create, Sell, TokenAmountType},
 };
 use crate::{
     common::{accounts::PUBKEY_WSOL, trading_endpoint::TradingEndpoint},
@@ -119,13 +120,13 @@ impl DexTrait for PumpSwap {
         _: Option<&Pubkey>,
         creator_vault: Option<&Pubkey>,
         sol_amount: u64,
-        buy_token_amount: u64,
+        token_amount: u64,
         blockhash: Hash,
         fee: Option<PriorityFee>,
         tip: Option<u64>,
     ) -> anyhow::Result<Vec<Signature>> {
         let creator_vault = creator_vault.ok_or(anyhow::anyhow!("creator vault not provided: {}", mint.to_string()))?;
-        let instruction = self.build_buy_instruction(payer, mint, &creator_vault, buy_token_amount, sol_amount)?;
+        let instruction = self.build_buy_instruction(payer, mint, &creator_vault, Buy { token_amount, sol_amount })?;
         let instructions = build_wsol_buy_instructions(payer, mint, sol_amount, instruction)?;
         let signatures = self.endpoint.build_and_broadcast_tx(payer, instructions, blockhash, fee, tip).await?;
 
@@ -181,7 +182,7 @@ impl DexTrait for PumpSwap {
         tip: Option<u64>,
     ) -> anyhow::Result<Vec<Signature>> {
         let creator_vault = creator_vault.ok_or(anyhow::anyhow!("creator vault not provided: {}", mint.to_string()))?;
-        let instruction = self.build_sell_instruction(payer, mint, &creator_vault, token_amount, sol_amount)?;
+        let instruction = self.build_sell_instruction(payer, mint, &creator_vault, Sell { token_amount, sol_amount })?;
         let instructions = build_wsol_sell_instructions(payer, mint, close_mint_ata, instruction)?;
         let signatures = self.endpoint.build_and_broadcast_tx(payer, instructions, blockhash, fee, tip).await?;
 
@@ -206,8 +207,6 @@ impl PumpSwap {
     }
 
     pub fn get_pool_address(mint: &Pubkey) -> Pubkey {
-        println!("mint: {:?}", mint.to_string());
-        println!("pool_authority: {:?}", Self::get_pool_authority_pda(mint).to_string());
         Pubkey::find_program_address(
             &[
                 b"pool",
@@ -251,28 +250,18 @@ impl PumpSwap {
         })
     }
 
-    fn build_buy_instruction(
-        &self,
-        payer: &Keypair,
-        mint: &Pubkey,
-        creator_vault: &Pubkey,
-        buy_token_amount: u64,
-        max_sol_cost: u64,
-    ) -> anyhow::Result<Instruction> {
+    fn build_buy_instruction(&self, payer: &Keypair, mint: &Pubkey, creator_vault: &Pubkey, buy: Buy) -> anyhow::Result<Instruction> {
         self.initialized()?;
 
-        let mut data = Vec::with_capacity(8 + 8 + 8);
-        data.extend_from_slice(&[102, 6, 61, 18, 1, 218, 235, 234]); // discriminator
-        data.extend_from_slice(&buy_token_amount.to_le_bytes());
-        data.extend_from_slice(&max_sol_cost.to_le_bytes());
-
+        let buy_info: BuyInfo = buy.into();
+        let buffer = buy_info.to_buffer()?;
         let pool = Self::get_pool_address(&mint);
         let creator_vault_ata = get_associated_token_address(creator_vault, &PUBKEY_WSOL);
         let fee_recipient = self.global_account.get().unwrap().protocol_fee_recipients.choose(&mut rand::rng()).unwrap();
 
         Ok(Instruction::new_with_bytes(
             PUBKEY_PUMPSWAP,
-            &data,
+            &buffer,
             vec![
                 AccountMeta::new_readonly(pool, false),
                 AccountMeta::new(payer.pubkey(), true),
@@ -297,28 +286,18 @@ impl PumpSwap {
         ))
     }
 
-    pub fn build_sell_instruction(
-        &self,
-        payer: &Keypair,
-        mint: &Pubkey,
-        creator_vault: &Pubkey,
-        token_amount: u64,
-        min_sol_out: u64,
-    ) -> anyhow::Result<Instruction> {
+    pub fn build_sell_instruction(&self, payer: &Keypair, mint: &Pubkey, creator_vault: &Pubkey, sell: Sell) -> anyhow::Result<Instruction> {
         self.initialized()?;
 
-        let mut data = Vec::with_capacity(8 + 8 + 8);
-        data.extend_from_slice(&[51, 230, 133, 164, 1, 127, 131, 173]); // discriminator
-        data.extend_from_slice(&token_amount.to_le_bytes());
-        data.extend_from_slice(&min_sol_out.to_le_bytes());
-
+        let sell_info: SellInfo = sell.into();
+        let buffer = sell_info.to_buffer()?;
         let pool = Self::get_pool_address(&mint);
         let creator_vault_ata = get_associated_token_address(creator_vault, &PUBKEY_WSOL);
         let fee_recipient = self.global_account.get().unwrap().protocol_fee_recipients.choose(&mut rand::rng()).unwrap();
 
         Ok(Instruction::new_with_bytes(
             PUBKEY_PUMPSWAP,
-            &data,
+            &buffer,
             vec![
                 AccountMeta::new_readonly(pool, false),
                 AccountMeta::new(payer.pubkey(), true),
