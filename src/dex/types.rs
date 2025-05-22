@@ -1,5 +1,6 @@
 use super::{dex_traits::DexTrait, pumpfun, pumpswap};
 use crate::common::trading_endpoint::TradingEndpoint;
+use serde::{Deserialize, Serialize};
 use solana_client::nonblocking::rpc_client::RpcClient;
 use solana_sdk::pubkey::Pubkey;
 use spl_associated_token_account::get_associated_token_address;
@@ -24,7 +25,7 @@ pub struct Create {
     pub slippage_basis_points: Option<u64>,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum DexType {
     Pumpfun,
     PumpSwap,

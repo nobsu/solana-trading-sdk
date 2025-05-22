@@ -5,7 +5,12 @@ use super::{
 use crate::instruction::builder::{build_transaction, PriorityFee};
 use rand::seq::IndexedRandom;
 use solana_client::nonblocking::rpc_client::RpcClient;
-use solana_sdk::{pubkey::Pubkey, signature::Keypair, signer::Signer, transaction::VersionedTransaction};
+use solana_sdk::{
+    pubkey::Pubkey,
+    signature::{Keypair, Signature},
+    signer::Signer,
+    transaction::VersionedTransaction,
+};
 use spl_associated_token_account::get_associated_token_address;
 use std::sync::Arc;
 
@@ -71,33 +76,39 @@ impl DefaultSWQoSClient {
         }
     }
 
-    pub async fn transfer(&self, from: &Keypair, to: &Pubkey, amount: u64, fee: Option<PriorityFee>) -> anyhow::Result<()> {
+    pub async fn transfer(&self, from: &Keypair, to: &Pubkey, amount: u64, fee: Option<PriorityFee>) -> anyhow::Result<Signature> {
         let blockhash = self.rpc_client.get_latest_blockhash().await?;
         let instruction = solana_sdk::system_instruction::transfer(&from.pubkey(), to, amount);
         let transaction = build_transaction(from, vec![instruction], blockhash, fee, None)?;
-        self.send_transaction(transaction).await
+        let signature = transaction.signatures[0];
+        self.send_transaction(transaction).await?;
+        Ok(signature)
     }
 
-    pub async fn batch_transfer(&self, from: &Keypair, to: Vec<TransferInfo>, fee: Option<PriorityFee>) -> anyhow::Result<()> {
+    pub async fn batch_transfer(&self, from: &Keypair, to: Vec<TransferInfo>, fee: Option<PriorityFee>) -> anyhow::Result<Signature> {
         let blockhash = self.rpc_client.get_latest_blockhash().await?;
         let instructions = to
             .iter()
             .map(|transfer| solana_sdk::system_instruction::transfer(&from.pubkey(), &transfer.to, transfer.amount))
             .collect::<Vec<_>>();
         let transaction = build_transaction(from, instructions, blockhash, fee, None)?;
-        self.send_transaction(transaction).await
+        let signature = transaction.signatures[0];
+        self.send_transaction(transaction).await?;
+        Ok(signature)
     }
 
-    pub async fn spl_transfer(&self, from: &Keypair, to: &Pubkey, mint: &Pubkey, amount: u64, fee: Option<PriorityFee>) -> anyhow::Result<()> {
+    pub async fn spl_transfer(&self, from: &Keypair, to: &Pubkey, mint: &Pubkey, amount: u64, fee: Option<PriorityFee>) -> anyhow::Result<Signature> {
         let blockhash = self.rpc_client.get_latest_blockhash().await?;
         let from_ata = get_associated_token_address(&from.pubkey(), mint);
         let to_ata = get_associated_token_address(to, mint);
         let instruction = spl_token::instruction::transfer(&spl_token::ID, &from_ata, &to_ata, &from.pubkey(), &[], amount)?;
         let transaction = build_transaction(from, vec![instruction], blockhash, fee, None)?;
-        self.send_transaction(transaction).await
+        let signature = transaction.signatures[0];
+        self.send_transaction(transaction).await?;
+        Ok(signature)
     }
 
-    pub async fn spl_batch_transfer(&self, from: &Keypair, to: Vec<TransferInfo>, mint: &Pubkey, fee: Option<PriorityFee>) -> anyhow::Result<()> {
+    pub async fn spl_batch_transfer(&self, from: &Keypair, to: Vec<TransferInfo>, mint: &Pubkey, fee: Option<PriorityFee>) -> anyhow::Result<Signature> {
         let blockhash = self.rpc_client.get_latest_blockhash().await?;
         let from_ata = get_associated_token_address(&from.pubkey(), mint);
         let instructions = to
@@ -108,6 +119,24 @@ impl DefaultSWQoSClient {
             })
             .collect::<Result<Vec<_>, _>>()?;
         let transaction = build_transaction(from, instructions, blockhash, fee, None)?;
-        self.send_transaction(transaction).await
+        let signature = transaction.signatures[0];
+        self.send_transaction(transaction).await?;
+        Ok(signature)
+    }
+
+    pub async fn wait_for_confirm(&self, signature: &Signature) -> anyhow::Result<()> {
+        const MAX_WAIT_SECONDS: u64 = 10;
+        let ts = std::time::SystemTime::now();
+        loop {
+            let confirmed = self.rpc_client.confirm_transaction(&signature).await?;
+            if confirmed {
+                break;
+            }
+            if ts.elapsed().unwrap().as_secs() > MAX_WAIT_SECONDS {
+                return Err(anyhow::anyhow!("Transaction confirmation timedout: {:?}", signature));
+            }
+            tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+        }
+        Ok(())
     }
 }

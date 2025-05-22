@@ -1,3 +1,5 @@
+use crate::common::accounts::PUBKEY_WSOL;
+use serde::{Deserialize, Serialize};
 use solana_sdk::{
     compute_budget::ComputeBudgetInstruction,
     hash::Hash,
@@ -15,9 +17,7 @@ use spl_associated_token_account::{
 };
 use spl_token::instruction::{close_account, sync_native};
 
-use crate::common::accounts::PUBKEY_WSOL;
-
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 pub struct PriorityFee {
     pub unit_limit: u32,
     pub unit_price: u64,
