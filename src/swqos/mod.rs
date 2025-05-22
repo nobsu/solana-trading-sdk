@@ -19,8 +19,8 @@ use zeroslot::ZEROSLOT_TIP_ACCOUNTS;
 // (endpoint, auth_token)
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum SWQoSType {
-    Default(String, String),
-    Jito(String, String),
+    Default(String, Option<(String, String)>),
+    Jito(String),
     NextBlock(String, String),
     Blox(String, String),
     Temporal(String, String),
@@ -38,8 +38,8 @@ pub trait SWQoSTrait: Send + Sync + Any {
 impl SWQoSType {
     pub fn instantiate(&self, rpc_client: Arc<RpcClient>) -> Arc<dyn SWQoSTrait> {
         match self {
-            SWQoSType::Default(endpoint, _) => Arc::new(DefaultSWQoSClient::new("default", rpc_client, endpoint.to_string(), None, vec![])),
-            SWQoSType::Jito(endpoint, _) => Arc::new(JitoClient::new(rpc_client, endpoint.to_string())),
+            SWQoSType::Default(endpoint, header) => Arc::new(DefaultSWQoSClient::new("default", rpc_client, endpoint.to_string(), header.clone(), vec![])),
+            SWQoSType::Jito(endpoint) => Arc::new(JitoClient::new(rpc_client, endpoint.to_string())),
             SWQoSType::NextBlock(endpoint, auth_token) => Arc::new(NextBlockClient::new(rpc_client, endpoint.to_string(), auth_token.to_string())),
             SWQoSType::Blox(endpoint, auth_token) => Arc::new(BloxClient::new(rpc_client, endpoint.to_string(), auth_token.to_string())),
             SWQoSType::ZeroSlot(endpoint, auth_token) => Arc::new(DefaultSWQoSClient::new(

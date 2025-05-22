@@ -66,8 +66,8 @@ pub async fn get_trading_client() -> anyhow::Result<TradingClient> {
     let client = TradingClient::new(TradingConfig {
         rpc_url: rpc_url.to_string(),
         swqos: vec![
-            SWQoSType::Default("https://solana-rpc.publicnode.com".to_string(), "".to_string()),
-            SWQoSType::Jito(JITO_ENDPOINT_MAINNET.to_string(), "your_api_key".to_string()),
+            SWQoSType::Default("https://solana-rpc.publicnode.com".to_string(), None),
+            SWQoSType::Jito(JITO_ENDPOINT_MAINNET.to_string()),
             SWQoSType::NextBlock(NEXTBLOCK_ENDPOINT_FRA.to_string(), "your_api_key".to_string()),
             SWQoSType::Blox(BLOX_ENDPOINT_FRA.to_string(), "your_api_key".to_string()),
             SWQoSType::ZeroSlot(ZEROSLOT_ENDPOINT_FRA.to_string(), "your_api_key".to_string()),
