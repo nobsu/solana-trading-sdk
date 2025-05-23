@@ -56,4 +56,31 @@ pub trait DexTrait: Send + Sync + Any {
         fee: Option<PriorityFee>,
         tip: Option<u64>,
     ) -> anyhow::Result<Vec<Signature>>;
+    async fn batch_buy(
+        &self,
+        mint: &Pubkey,
+        slippage_basis_points: u64,
+        fee: PriorityFee,
+        tip: u64,
+        items: Vec<BatchBuyParam>,
+    ) -> anyhow::Result<Vec<Signature>>;
+    async fn batch_sell(
+        &self,
+        mint: &Pubkey,
+        slippage_basis_points: u64,
+        fee: PriorityFee,
+        tip: u64,
+        items: Vec<BatchSellParam>,
+    ) -> anyhow::Result<Vec<Signature>>;
+}
+
+pub struct BatchBuyParam {
+    pub payer: Keypair,
+    pub sol_amount: u64,
+}
+
+pub struct BatchSellParam {
+    pub payer: Keypair,
+    pub token_amount: u64,
+    pub close_mint_ata: bool,
 }

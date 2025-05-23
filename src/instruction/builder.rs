@@ -55,7 +55,7 @@ pub fn build_transaction(
     Ok(transaction)
 }
 
-pub fn build_buy_instructions(payer: &Keypair, mint: &Pubkey, buy_instruction: Instruction) -> anyhow::Result<Vec<Instruction>> {
+pub fn build_sol_buy_instructions(payer: &Keypair, mint: &Pubkey, buy_instruction: Instruction) -> anyhow::Result<Vec<Instruction>> {
     let mut instructions = vec![];
 
     instructions.push(create_associated_token_account(&payer.pubkey(), &payer.pubkey(), &mint, &spl_token::ID));
@@ -64,7 +64,7 @@ pub fn build_buy_instructions(payer: &Keypair, mint: &Pubkey, buy_instruction: I
     Ok(instructions)
 }
 
-pub fn build_sell_instructions(payer: &Keypair, mint: &Pubkey, sell_instruction: Instruction, close_mint_ata: bool) -> Result<Vec<Instruction>, anyhow::Error> {
+pub fn build_sol_sell_instructions(payer: &Keypair, mint: &Pubkey, sell_instruction: Instruction, close_mint_ata: bool) -> Result<Vec<Instruction>, anyhow::Error> {
     let mut instructions = vec![sell_instruction];
 
     if close_mint_ata {

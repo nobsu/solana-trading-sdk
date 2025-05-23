@@ -1,12 +1,12 @@
 use super::{
     amm_calc::{amm_buy_get_token_out, amm_sell_get_sol_out, calculate_with_slippage_buy, calculate_with_slippage_sell},
-    dex_traits::DexTrait,
+    dex_traits::{BatchBuyParam, BatchSellParam, DexTrait},
     pumpfun_types::{BuyInfo, SellInfo},
     types::{Buy, Create, Sell, TokenAmountType},
 };
 use crate::{
-    common::trading_endpoint::TradingEndpoint,
-    instruction::builder::{build_buy_instructions, build_sell_instructions, PriorityFee},
+    common::trading_endpoint::{BatchTxItem, TradingEndpoint},
+    instruction::builder::{build_sol_buy_instructions, build_sol_sell_instructions, PriorityFee},
 };
 use borsh::{BorshDeserialize, BorshSerialize};
 use once_cell::sync::OnceCell;
@@ -217,7 +217,7 @@ impl DexTrait for Pumpfun {
                 sol_amount,
             },
         )?;
-        let instructions = build_buy_instructions(payer, mint, instruction)?;
+        let instructions = build_sol_buy_instructions(payer, mint, instruction)?;
         let signatures = self.endpoint.build_and_broadcast_tx(payer, instructions, blockhash, fee, tip).await?;
 
         Ok(signatures)
@@ -273,8 +273,88 @@ impl DexTrait for Pumpfun {
     ) -> anyhow::Result<Vec<Signature>> {
         let creator_vault = creator_vault.ok_or(anyhow::anyhow!("creator vault not provided: {}", mint.to_string()))?;
         let instruction = self.build_sell_instruction(payer, mint, creator_vault, Sell { token_amount, sol_amount })?;
-        let instructions = build_sell_instructions(payer, mint, instruction, close_mint_ata)?;
+        let instructions = build_sol_sell_instructions(payer, mint, instruction, close_mint_ata)?;
         let signatures = self.endpoint.build_and_broadcast_tx(payer, instructions, blockhash, fee, tip).await?;
+
+        Ok(signatures)
+    }
+
+    async fn batch_buy(
+        &self,
+        mint: &Pubkey,
+        slippage_basis_points: u64,
+        fee: PriorityFee,
+        tip: u64,
+        items: Vec<BatchBuyParam>,
+    ) -> anyhow::Result<Vec<Signature>> {
+        let ((_, pool_account), blockhash) = tokio::try_join!(self.get_pool(&mint), self.endpoint.get_latest_blockhash())?;
+        let creator_vault = Self::get_creator_vault_pda(&pool_account.creator).ok_or(anyhow::anyhow!("Creator vault not found: {}", mint.to_string()))?;
+        let mut pool_token_amount = pool_account.virtual_token_reserves;
+        let mut pool_sol_amount = pool_account.virtual_sol_reserves;
+        let mut batch_items = vec![];
+
+        for item in items {
+            let sol_lamports_with_slippage = calculate_with_slippage_buy(item.sol_amount, slippage_basis_points);
+            let buy_token_amount = amm_buy_get_token_out(pool_sol_amount, pool_token_amount, item.sol_amount);
+            let instruction = self.build_buy_instruction(
+                &item.payer,
+                &mint,
+                &creator_vault,
+                Buy {
+                    token_amount: buy_token_amount,
+                    sol_amount: sol_lamports_with_slippage,
+                },
+            )?;
+            let instructions = build_sol_buy_instructions(&item.payer, mint, instruction)?;
+            batch_items.push(BatchTxItem {
+                payer: item.payer,
+                instructions,
+            });
+            pool_sol_amount += item.sol_amount;
+            pool_token_amount -= buy_token_amount;
+        }
+
+        let signatures = self.endpoint.build_and_broadcast_batch_txs(batch_items, blockhash, fee, tip).await?;
+
+        Ok(signatures)
+    }
+
+    async fn batch_sell(
+        &self,
+        mint: &Pubkey,
+        slippage_basis_points: u64,
+        fee: PriorityFee,
+        tip: u64,
+        items: Vec<BatchSellParam>,
+    ) -> anyhow::Result<Vec<Signature>> {
+        let ((_, pool_account), blockhash) = tokio::try_join!(self.get_pool(&mint), self.endpoint.get_latest_blockhash())?;
+        let creator_vault = Self::get_creator_vault_pda(&pool_account.creator).ok_or(anyhow::anyhow!("Creator vault not found: {}", mint.to_string()))?;
+        let mut pool_token_amount = pool_account.virtual_token_reserves;
+        let mut pool_sol_amount = pool_account.virtual_sol_reserves;
+        let mut batch_items = vec![];
+
+        for item in items {
+            let sol_lamports = amm_sell_get_sol_out(pool_sol_amount, pool_token_amount, item.token_amount);
+            let sol_lamports_with_slippage = calculate_with_slippage_sell(sol_lamports, slippage_basis_points);
+            let instruction = self.build_sell_instruction(
+                &item.payer,
+                &mint,
+                &creator_vault,
+                Sell {
+                    token_amount: item.token_amount,
+                    sol_amount: sol_lamports_with_slippage,
+                },
+            )?;
+            let instructions = build_sol_sell_instructions(&item.payer, mint, instruction, item.close_mint_ata)?;
+            batch_items.push(BatchTxItem {
+                payer: item.payer,
+                instructions,
+            });
+            pool_sol_amount -= sol_lamports;
+            pool_token_amount += item.token_amount;
+        }
+
+        let signatures = self.endpoint.build_and_broadcast_batch_txs(batch_items, blockhash, fee, tip).await?;
 
         Ok(signatures)
     }

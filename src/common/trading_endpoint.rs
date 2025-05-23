@@ -15,6 +15,11 @@ pub struct TradingEndpoint {
     pub swqos: Vec<Arc<dyn SWQoSTrait>>,
 }
 
+pub struct BatchTxItem {
+    pub payer: Keypair,
+    pub instructions: Vec<Instruction>,
+}
+
 impl TradingEndpoint {
     pub fn new(rpc: Arc<RpcClient>, swqos: Vec<Arc<dyn SWQoSTrait>>) -> Self {
         Self { rpc, swqos }
@@ -54,6 +59,42 @@ impl TradingEndpoint {
             let tx = build_transaction(payer, instructions.clone(), blockhash, fee, tip)?;
             signatures.push(tx.signatures[0]);
             tasks.push(swqos.send_transaction(tx));
+        }
+
+        let result = futures::future::join_all(tasks).await;
+        let errors = result.into_iter().filter_map(|res| res.err()).collect::<Vec<_>>();
+        if errors.len() > 0 {
+            return Err(anyhow::anyhow!("{:?}", errors));
+        }
+
+        Ok(signatures)
+    }
+
+    pub async fn build_and_broadcast_batch_txs(
+        &self,
+        items: Vec<BatchTxItem>,
+        blockhash: Hash,
+        fee: PriorityFee,
+        tip: u64,
+    ) -> anyhow::Result<Vec<Signature>> {
+        let mut tasks = vec![];
+        let mut signatures = vec![];
+        for swqos in &self.swqos {
+            let tip_account = swqos
+                .get_tip_account()
+                .ok_or(anyhow::anyhow!("No tip account provided for SWQoS: {}", swqos.get_name()))?;
+            let tip = Some(TipFee {
+                tip_account,
+                tip_lamports: tip,
+            });
+
+            let txs = items
+                .iter()
+                .map(|item| build_transaction(&item.payer, item.instructions.clone(), blockhash, Some(fee), tip))
+                .collect::<Result<Vec<_>, _>>()?;
+
+            signatures.extend(txs.iter().map(|tx| tx.signatures[0]));
+            tasks.push(swqos.send_transactions(txs));
         }
 
         let result = futures::future::join_all(tasks).await;

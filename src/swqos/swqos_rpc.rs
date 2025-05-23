@@ -53,7 +53,7 @@ impl SWQoSClientTrait for reqwest::Client {
         let txs_base64 = request.transactions.iter().map(|tx| tx.to_base64_string()).collect::<Vec<String>>();
         let body = serde_json::json!({
             "jsonrpc": "2.0",
-            "method": "sendTransaction",
+            "method": "sendTransactions",
             "params": [
                 txs_base64,
                 { "encoding": "base64" }
