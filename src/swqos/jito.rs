@@ -57,7 +57,7 @@ impl SWQoSTrait for JitoClient {
         let txs_base64 = transactions.iter().map(|tx| tx.to_base64_string()).collect::<Vec<String>>();
         let body = serde_json::json!({
             "jsonrpc": "2.0",
-            "method": "sendTransaction",
+            "method": "sendBundle",
             "params": [
                 txs_base64,
                 { "encoding": "base64" }

@@ -70,27 +70,21 @@ impl TradingEndpoint {
         Ok(signatures)
     }
 
-    pub async fn build_and_broadcast_batch_txs(
-        &self,
-        items: Vec<BatchTxItem>,
-        blockhash: Hash,
-        fee: PriorityFee,
-        tip: u64,
-    ) -> anyhow::Result<Vec<Signature>> {
+    pub async fn build_and_broadcast_batch_txs(&self, items: Vec<BatchTxItem>, blockhash: Hash, fee: PriorityFee, tip: u64) -> anyhow::Result<Vec<Signature>> {
         let mut tasks = vec![];
         let mut signatures = vec![];
         for swqos in &self.swqos {
             let tip_account = swqos
                 .get_tip_account()
                 .ok_or(anyhow::anyhow!("No tip account provided for SWQoS: {}", swqos.get_name()))?;
-            let tip = Some(TipFee {
+            let mut tip = Some(TipFee {
                 tip_account,
                 tip_lamports: tip,
             });
 
             let txs = items
                 .iter()
-                .map(|item| build_transaction(&item.payer, item.instructions.clone(), blockhash, Some(fee), tip))
+                .map(|item| build_transaction(&item.payer, item.instructions.clone(), blockhash, Some(fee), tip.take()))
                 .collect::<Result<Vec<_>, _>>()?;
 
             signatures.extend(txs.iter().map(|tx| tx.signatures[0]));

@@ -92,7 +92,7 @@ impl SWQoSClientTrait for reqwest::Client {
             return Err(anyhow::anyhow!(error));
         }
 
-        eprintln!("swqos_json_post success: {} {}", request.name, txs_hash);
+        eprintln!("swqos_json_post success: {} {} {:#?}", request.name, txs_hash, response_json);
 
         Ok(())
     }
