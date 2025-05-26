@@ -1,6 +1,5 @@
-use borsh::{BorshDeserialize, BorshSerialize};
-
 use super::types::{Buy, Sell};
+use borsh::{BorshDeserialize, BorshSerialize};
 
 #[derive(Debug, Clone, PartialEq, Eq, BorshSerialize, BorshDeserialize)]
 pub struct BuyInfo {

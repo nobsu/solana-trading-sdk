@@ -53,6 +53,7 @@ pub struct PoolAccount {
     pub pool_base_token_account: Pubkey,
     pub pool_quote_token_account: Pubkey,
     pub lp_supply: u64,
+    pub coin_creator: Pubkey,
 }
 pub struct PoolInfo {
     pub pool_address: Pubkey,
@@ -99,7 +100,7 @@ impl DexTrait for PumpSwap {
     ) -> anyhow::Result<Vec<Signature>> {
         let (pool_info, blockhash) = tokio::try_join!(self.get_pool(&mint), self.endpoint.get_latest_blockhash(),)?;
         let buy_token_amount = amm_buy_get_token_out(pool_info.pool_quote_reserve, pool_info.pool_base_reserve, sol_amount);
-        let creator_vault = Self::get_creator_vault(&pool_info.pool_account.creator);
+        let creator_vault = Self::get_creator_vault(&pool_info.pool_account.coin_creator);
         let sol_lamports_with_slippage = calculate_with_slippage_buy(sol_amount, slippage_basis_points);
 
         self.buy_immediately(
@@ -152,7 +153,7 @@ impl DexTrait for PumpSwap {
             self.endpoint.get_latest_blockhash(),
             token_amount.to_amount(self.endpoint.rpc.clone(), &payer_pubkey, mint)
         )?;
-        let creator_vault = Self::get_creator_vault(&pool_info.pool_account.creator);
+        let creator_vault = Self::get_creator_vault(&pool_info.pool_account.coin_creator);
         let sol_lamports = amm_sell_get_sol_out(pool_info.pool_quote_reserve, pool_info.pool_base_reserve, token_amount);
         let sol_lamports_with_slippage = calculate_with_slippage_sell(sol_lamports, slippage_basis_points);
 
@@ -201,7 +202,7 @@ impl DexTrait for PumpSwap {
         items: Vec<BatchBuyParam>,
     ) -> anyhow::Result<Vec<Signature>> {
         let (pool_info, blockhash) = tokio::try_join!(self.get_pool(&mint), self.endpoint.get_latest_blockhash(),)?;
-        let creator_vault = Self::get_creator_vault(&pool_info.pool_account.creator);
+        let creator_vault = Self::get_creator_vault(&pool_info.pool_account.coin_creator);
         let mut pool_token_amount = pool_info.pool_base_reserve;
         let mut pool_sol_amount = pool_info.pool_quote_reserve;
         let mut batch_items = vec![];
@@ -241,7 +242,7 @@ impl DexTrait for PumpSwap {
         items: Vec<BatchSellParam>,
     ) -> anyhow::Result<Vec<Signature>> {
         let (pool_info, blockhash) = tokio::try_join!(self.get_pool(&mint), self.endpoint.get_latest_blockhash(),)?;
-        let creator_vault = Self::get_creator_vault(&pool_info.pool_account.creator);
+        let creator_vault = Self::get_creator_vault(&pool_info.pool_account.coin_creator);
         let mut pool_token_amount = pool_info.pool_base_reserve;
         let mut pool_sol_amount = pool_info.pool_quote_reserve;
         let mut batch_items = vec![];
@@ -363,7 +364,7 @@ impl PumpSwap {
                 AccountMeta::new_readonly(spl_associated_token_account::ID, false),
                 AccountMeta::new_readonly(PUBKEY_EVENT_AUTHORITY, false),
                 AccountMeta::new_readonly(PUBKEY_PUMPSWAP, false),
-                AccountMeta::new_readonly(creator_vault_ata, true),
+                AccountMeta::new(creator_vault_ata, false),
                 AccountMeta::new_readonly(*creator_vault, false),
             ],
         ))
@@ -399,7 +400,7 @@ impl PumpSwap {
                 AccountMeta::new_readonly(spl_associated_token_account::ID, false),
                 AccountMeta::new_readonly(PUBKEY_EVENT_AUTHORITY, false),
                 AccountMeta::new_readonly(PUBKEY_PUMPSWAP, false),
-                AccountMeta::new_readonly(creator_vault_ata, true),
+                AccountMeta::new(creator_vault_ata, false),
                 AccountMeta::new_readonly(*creator_vault, false),
             ],
         ))
