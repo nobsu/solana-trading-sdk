@@ -6,7 +6,7 @@ authors = ["vFight <vfight@hotmail.com>"]
 repository = "https://github.com/LulzFi/solana-trading-sdk"
 description = "A Rust SDK for trading on Solana"
 license = "MIT"
-keywords = ["solana", "memecoins", "pumpfun", "raydium", "trading", "sdk"]
+keywords = ["solana", "memecoins", "pumpfun", "trading", "sdk"]
 readme = "README.md"
 
 [lib]
