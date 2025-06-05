@@ -1,6 +1,6 @@
 use anyhow::Ok;
 use solana_client::nonblocking::rpc_client::RpcClient;
-use solana_sdk::{native_token::sol_to_lamports, pubkey::Pubkey, signature::Keypair, signer::Signer};
+use solana_sdk::{native_token::sol_str_to_lamports, pubkey::Pubkey, signature::Keypair, signer::Signer};
 use solana_trading_sdk::{
     common::{trading_endpoint::TradingEndpoint, TradingClient, TradingConfig},
     dex::{
@@ -37,7 +37,7 @@ pub async fn transfer_sol() -> anyhow::Result<()> {
     let rpc_url = "https://solana-rpc.publicnode.com".to_string();
     let from = Keypair::from_base58_string("your_payer_pubkey");
     let to = Pubkey::from_str("recipient_pubkey")?;
-    let amount = sol_to_lamports(0.1);
+    let amount = sol_str_to_lamports("0.1").unwrap();
     let fee = PriorityFee {
         unit_limit: 100000,
         unit_price: 10000000,
@@ -83,13 +83,13 @@ pub async fn swap() -> anyhow::Result<()> {
     let client = get_trading_client().await?;
     let payer = Keypair::from_base58_string("your_payer_pubkey");
     let mint = Pubkey::from_str("token_mint_pubkey")?;
-    let sol_amount = sol_to_lamports(1.0);
+    let sol_amount = sol_str_to_lamports("1.0").unwrap();
     let slippage_basis_points = 3000; // 30%
     let fee = PriorityFee {
         unit_limit: 100000,
         unit_price: 10000000,
     };
-    let tip = sol_to_lamports(0.001);
+    let tip = sol_str_to_lamports("0.001").unwrap();
 
     client.dexs[&DexType::Pumpfun]
         .buy(&payer, &mint, sol_amount, slippage_basis_points, Some(fee), Some(tip))
@@ -122,13 +122,13 @@ pub async fn create() -> anyhow::Result<()> {
 
     let payer = Keypair::from_base58_string("your_payer_keypair");
     let mint = Keypair::from_base58_string("your_mint_keypair");
-    let buy_sol_amount = Some(sol_to_lamports(0.1));
+    let buy_sol_amount = Some(sol_str_to_lamports("0.1").unwrap());
     let slippage_basis_points = 3000; // 30%
     let fee = PriorityFee {
         unit_limit: 100000,
         unit_price: 10000000,
     };
-    let tip = sol_to_lamports(0.001);
+    let tip = sol_str_to_lamports("0.001").unwrap();
 
     let create = Create {
         name: metadata.metadata.name,
