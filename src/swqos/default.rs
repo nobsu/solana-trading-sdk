@@ -4,10 +4,15 @@ use super::{
 };
 use crate::instruction::builder::{build_transaction, PriorityFee};
 use rand::seq::IndexedRandom;
-use solana_client::nonblocking::rpc_client::RpcClient;
+use solana_client::{nonblocking::rpc_client::RpcClient, rpc_config::RpcTransactionConfig};
 use solana_sdk::{
-    commitment_config::CommitmentConfig, pubkey::Pubkey, signature::{Keypair, Signature}, signer::Signer, transaction::VersionedTransaction
+    commitment_config::CommitmentConfig,
+    pubkey::Pubkey,
+    signature::{Keypair, Signature},
+    signer::Signer,
+    transaction::VersionedTransaction,
 };
+use solana_transaction_status::UiTransactionEncoding;
 use spl_associated_token_account::get_associated_token_address;
 use std::sync::Arc;
 
@@ -125,9 +130,21 @@ impl DefaultSWQoSClient {
         const MAX_WAIT_SECONDS: u64 = 10;
         let ts = std::time::SystemTime::now();
         loop {
-            let confirmed = self.rpc_client.confirm_transaction_with_commitment(&signature, CommitmentConfig::processed()).await?.value;
-            if confirmed {
-                break;
+            if let Ok(tx) = self
+                .rpc_client
+                .get_transaction_with_config(
+                    &signature,
+                    RpcTransactionConfig {
+                        encoding: Some(UiTransactionEncoding::Json),
+                        commitment: Some(CommitmentConfig::confirmed()),
+                        max_supported_transaction_version: Some(0),
+                    },
+                )
+                .await
+            {
+                if tx.slot > 0 {
+                    break;
+                }
             }
             if ts.elapsed().unwrap().as_secs() > MAX_WAIT_SECONDS {
                 return Err(anyhow::anyhow!("Transaction confirmation timedout: {:?}", signature));
