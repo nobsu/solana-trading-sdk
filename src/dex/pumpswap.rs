@@ -10,6 +10,7 @@ use crate::{
         accounts::PUBKEY_WSOL,
         trading_endpoint::{BatchTxItem, TradingEndpoint},
     },
+    dex::types::CreateATA,
     instruction::builder::{build_wsol_buy_instructions, build_wsol_sell_instructions, PriorityFee},
 };
 use borsh::{BorshDeserialize, BorshSerialize};
@@ -111,6 +112,7 @@ impl DexTrait for PumpSwap {
             sol_lamports_with_slippage,
             buy_token_amount,
             blockhash,
+            CreateATA::Idempotent,
             fee,
             tip,
         )
@@ -126,12 +128,13 @@ impl DexTrait for PumpSwap {
         sol_amount: u64,
         token_amount: u64,
         blockhash: Hash,
+        create_ata: CreateATA,
         fee: Option<PriorityFee>,
         tip: Option<u64>,
     ) -> anyhow::Result<Vec<Signature>> {
         let creator_vault = creator_vault.ok_or(anyhow::anyhow!("creator vault not provided: {}", mint.to_string()))?;
         let instruction = self.build_buy_instruction(payer, mint, &creator_vault, Buy { token_amount, sol_amount })?;
-        let instructions = build_wsol_buy_instructions(payer, mint, sol_amount, instruction)?;
+        let instructions = build_wsol_buy_instructions(payer, mint, sol_amount, instruction, create_ata)?;
         let signatures = self.endpoint.build_and_broadcast_tx(payer, instructions, blockhash, fee, tip).await?;
 
         Ok(signatures)
@@ -219,7 +222,7 @@ impl DexTrait for PumpSwap {
                     sol_amount: sol_lamports_with_slippage,
                 },
             )?;
-            let instructions = build_wsol_buy_instructions(&item.payer, mint, sol_lamports_with_slippage, instruction)?;
+            let instructions = build_wsol_buy_instructions(&item.payer, mint, sol_lamports_with_slippage, instruction, CreateATA::Idempotent)?;
             batch_items.push(BatchTxItem {
                 payer: item.payer,
                 instructions,

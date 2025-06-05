@@ -1,5 +1,5 @@
 use super::types::{Create, TokenAmountType};
-use crate::instruction::builder::PriorityFee;
+use crate::{dex::types::CreateATA, instruction::builder::PriorityFee};
 use solana_sdk::{
     hash::Hash,
     pubkey::Pubkey,
@@ -30,6 +30,7 @@ pub trait DexTrait: Send + Sync + Any {
         sol_amount: u64,
         token_amount: u64,
         blockhash: Hash,
+        create_ata: CreateATA,
         fee: Option<PriorityFee>,
         tip: Option<u64>,
     ) -> anyhow::Result<Vec<Signature>>;

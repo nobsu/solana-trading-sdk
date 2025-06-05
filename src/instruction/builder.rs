@@ -1,4 +1,4 @@
-use crate::common::accounts::PUBKEY_WSOL;
+use crate::{common::accounts::PUBKEY_WSOL, dex::types::CreateATA};
 use serde::{Deserialize, Serialize};
 use solana_sdk::{
     compute_budget::ComputeBudgetInstruction,
@@ -55,19 +55,33 @@ pub fn build_transaction(
     Ok(transaction)
 }
 
-pub fn build_sol_buy_instructions(payer: &Keypair, mint: &Pubkey, buy_instruction: Instruction) -> anyhow::Result<Vec<Instruction>> {
+pub fn build_sol_buy_instructions(payer: &Keypair, mint: &Pubkey, buy_instruction: Instruction, crate_ata: CreateATA) -> anyhow::Result<Vec<Instruction>> {
     let mut instructions = vec![];
 
-    instructions.push(create_associated_token_account(&payer.pubkey(), &payer.pubkey(), &mint, &spl_token::ID));
+    match crate_ata {
+        CreateATA::Create => {
+            instructions.push(create_associated_token_account(&payer.pubkey(), &payer.pubkey(), &mint, &spl_token::ID));
+        }
+        CreateATA::Idempotent => {
+            instructions.push(create_associated_token_account_idempotent(
+                &payer.pubkey(),
+                &payer.pubkey(),
+                &mint,
+                &spl_token::ID,
+            ));
+        }
+        CreateATA::None => {}
+    }
+
     instructions.push(buy_instruction);
 
     Ok(instructions)
 }
 
-pub fn build_sol_sell_instructions(payer: &Keypair, mint: &Pubkey, sell_instruction: Instruction, close_mint_ata: bool) -> Result<Vec<Instruction>, anyhow::Error> {
+pub fn build_sol_sell_instructions(payer: &Keypair, mint: &Pubkey, sell_instruction: Instruction, close_ata: bool) -> Result<Vec<Instruction>, anyhow::Error> {
     let mut instructions = vec![sell_instruction];
 
-    if close_mint_ata {
+    if close_ata {
         let mint_ata = get_associated_token_address(&payer.pubkey(), &mint);
         instructions.push(close_account(&spl_token::ID, &mint_ata, &payer.pubkey(), &payer.pubkey(), &[&payer.pubkey()])?);
     }
@@ -75,15 +89,29 @@ pub fn build_sol_sell_instructions(payer: &Keypair, mint: &Pubkey, sell_instruct
     Ok(instructions)
 }
 
-pub fn build_wsol_buy_instructions(payer: &Keypair, mint: &Pubkey, amount_sol: u64, buy_instruction: Instruction) -> anyhow::Result<Vec<Instruction>> {
+pub fn build_wsol_buy_instructions(
+    payer: &Keypair,
+    mint: &Pubkey,
+    amount_sol: u64,
+    buy_instruction: Instruction,
+    crate_ata: CreateATA,
+) -> anyhow::Result<Vec<Instruction>> {
     let mut instructions = vec![];
 
-    instructions.push(create_associated_token_account_idempotent(
-        &payer.pubkey(),
-        &payer.pubkey(),
-        &mint,
-        &spl_token::ID,
-    ));
+    match crate_ata {
+        CreateATA::Create => {
+            instructions.push(create_associated_token_account(&payer.pubkey(), &payer.pubkey(), &mint, &spl_token::ID));
+        }
+        CreateATA::Idempotent => {
+            instructions.push(create_associated_token_account_idempotent(
+                &payer.pubkey(),
+                &payer.pubkey(),
+                &mint,
+                &spl_token::ID,
+            ));
+        }
+        CreateATA::None => {}
+    }
 
     instructions.push(create_associated_token_account_idempotent(
         &payer.pubkey(),

@@ -62,3 +62,9 @@ impl TokenAmountType {
         }
     }
 }
+
+pub enum CreateATA {
+    Create,
+    None,
+    Idempotent,
+}

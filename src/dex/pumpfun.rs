@@ -6,6 +6,7 @@ use super::{
 };
 use crate::{
     common::trading_endpoint::{BatchTxItem, TradingEndpoint},
+    dex::types::CreateATA,
     instruction::builder::{build_sol_buy_instructions, build_sol_sell_instructions, PriorityFee},
 };
 use borsh::{BorshDeserialize, BorshSerialize};
@@ -189,6 +190,7 @@ impl DexTrait for Pumpfun {
             sol_lamports_with_slippage,
             buy_token_amount,
             blockhash,
+            CreateATA::Idempotent,
             fee,
             tip,
         )
@@ -204,6 +206,7 @@ impl DexTrait for Pumpfun {
         sol_amount: u64,
         buy_token_amount: u64,
         blockhash: Hash,
+        create_ata: CreateATA,
         fee: Option<PriorityFee>,
         tip: Option<u64>,
     ) -> anyhow::Result<Vec<Signature>> {
@@ -217,7 +220,7 @@ impl DexTrait for Pumpfun {
                 sol_amount,
             },
         )?;
-        let instructions = build_sol_buy_instructions(payer, mint, instruction)?;
+        let instructions = build_sol_buy_instructions(payer, mint, instruction, create_ata)?;
         let signatures = self.endpoint.build_and_broadcast_tx(payer, instructions, blockhash, fee, tip).await?;
 
         Ok(signatures)
@@ -305,7 +308,7 @@ impl DexTrait for Pumpfun {
                     sol_amount: sol_lamports_with_slippage,
                 },
             )?;
-            let instructions = build_sol_buy_instructions(&item.payer, mint, instruction)?;
+            let instructions = build_sol_buy_instructions(&item.payer, mint, instruction, CreateATA::Idempotent)?;
             batch_items.push(BatchTxItem {
                 payer: item.payer,
                 instructions,
