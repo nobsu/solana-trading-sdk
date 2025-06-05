@@ -20,7 +20,7 @@ use solana_sdk::{
     signature::{Keypair, Signature},
     signer::Signer,
 };
-use spl_associated_token_account::get_associated_token_address;
+use spl_associated_token_account::{get_associated_token_address, instruction::create_associated_token_account};
 use std::sync::Arc;
 
 pub const PUBKEY_PUMPFUN: Pubkey = pubkey!("6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P");
@@ -77,12 +77,12 @@ pub struct CreateInfo {
 }
 
 impl CreateInfo {
-    pub fn from_create(create: Create, creator: Pubkey) -> Self {
+    pub fn from_create(create: &Create, creator: Pubkey) -> Self {
         Self {
             discriminator: 8576854823835016728,
-            name: create.name,
-            symbol: create.symbol,
-            uri: create.uri,
+            name: create.name.to_string(),
+            symbol: create.symbol.to_string(),
+            uri: create.uri.to_string(),
             creator,
         }
     }
@@ -112,11 +112,11 @@ impl DexTrait for Pumpfun {
     }
 
     async fn create(&self, payer: Keypair, create: Create, fee: Option<PriorityFee>, tip: Option<u64>) -> anyhow::Result<Vec<Signature>> {
-        let mint = create.mint;
+        let mint = create.mint_private_key.pubkey();
         let buy_sol_amount = create.buy_sol_amount;
         let slippage_basis_points = create.slippage_basis_points.unwrap_or(0);
 
-        let create_info = CreateInfo::from_create(create, payer.pubkey());
+        let create_info = CreateInfo::from_create(&create, payer.pubkey());
         let mut buffer = Vec::new();
         create_info.serialize(&mut buffer)?;
 
@@ -131,10 +131,10 @@ impl DexTrait for Pumpfun {
                 AccountMeta::new(mint, true),
                 AccountMeta::new(*PUBKEY_MINT_AUTHORITY_PDA, false),
                 AccountMeta::new(bonding_curve, false),
+                AccountMeta::new(get_associated_token_address(&bonding_curve, &mint), false),
                 AccountMeta::new_readonly(*PUBKEY_GLOBAL_PDA, false),
                 AccountMeta::new_readonly(mpl_token_metadata::ID, false),
                 AccountMeta::new(mpl_token_metadata::accounts::Metadata::find_pda(&mint).0, false),
-                AccountMeta::new(payer.pubkey(), true),
                 AccountMeta::new(payer.pubkey(), true),
                 AccountMeta::new_readonly(solana_program::system_program::ID, false),
                 AccountMeta::new_readonly(spl_token::ID, false),
@@ -148,8 +148,11 @@ impl DexTrait for Pumpfun {
         instructions.push(create_instruction);
 
         if let Some(buy_sol_amount) = buy_sol_amount {
+            let create_ata = create_associated_token_account(&payer.pubkey(), &payer.pubkey(), &mint, &spl_token::ID);
+            instructions.push(create_ata);
+
             let buy_token_amount = amm_buy_get_token_out(INITIAL_VIRTUAL_SOL_RESERVES, INITIAL_VIRTUAL_TOKEN_RESERVES, buy_sol_amount);
-            let buy_token_amount = calculate_with_slippage_buy(buy_token_amount, slippage_basis_points);
+            let sol_lamports_with_slippage = calculate_with_slippage_buy(buy_sol_amount, slippage_basis_points);
             let creator_vault = Self::get_creator_vault_pda(&payer.pubkey()).unwrap();
             let buy_instruction = self.build_buy_instruction(
                 &payer,
@@ -157,13 +160,16 @@ impl DexTrait for Pumpfun {
                 &creator_vault,
                 Buy {
                     token_amount: buy_token_amount,
-                    sol_amount: buy_sol_amount,
+                    sol_amount: sol_lamports_with_slippage,
                 },
             )?;
             instructions.push(buy_instruction);
         }
 
-        let signatures = self.endpoint.build_and_broadcast_tx(&payer, instructions, blockhash, fee, tip).await?;
+        let signatures = self
+            .endpoint
+            .build_and_broadcast_tx(&payer, instructions, blockhash, fee, tip, Some(vec![&create.mint_private_key]))
+            .await?;
 
         Ok(signatures)
     }
@@ -221,7 +227,7 @@ impl DexTrait for Pumpfun {
             },
         )?;
         let instructions = build_sol_buy_instructions(payer, mint, instruction, create_ata)?;
-        let signatures = self.endpoint.build_and_broadcast_tx(payer, instructions, blockhash, fee, tip).await?;
+        let signatures = self.endpoint.build_and_broadcast_tx(payer, instructions, blockhash, fee, tip, None).await?;
 
         Ok(signatures)
     }
@@ -277,7 +283,7 @@ impl DexTrait for Pumpfun {
         let creator_vault = creator_vault.ok_or(anyhow::anyhow!("creator vault not provided: {}", mint.to_string()))?;
         let instruction = self.build_sell_instruction(payer, mint, creator_vault, Sell { token_amount, sol_amount })?;
         let instructions = build_sol_sell_instructions(payer, mint, instruction, close_mint_ata)?;
-        let signatures = self.endpoint.build_and_broadcast_tx(payer, instructions, blockhash, fee, tip).await?;
+        let signatures = self.endpoint.build_and_broadcast_tx(payer, instructions, blockhash, fee, tip, None).await?;
 
         Ok(signatures)
     }

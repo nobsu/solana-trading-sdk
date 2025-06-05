@@ -1,6 +1,6 @@
 use anyhow::Ok;
 use solana_client::nonblocking::rpc_client::RpcClient;
-use solana_sdk::{native_token::sol_str_to_lamports, pubkey::Pubkey, signature::Keypair, signer::Signer};
+use solana_sdk::{native_token::sol_str_to_lamports, pubkey::Pubkey, signature::Keypair};
 use solana_trading_sdk::{
     common::{trading_endpoint::TradingEndpoint, TradingClient, TradingConfig},
     dex::{
@@ -121,7 +121,7 @@ pub async fn create() -> anyhow::Result<()> {
     let pumpfun_client = Pumpfun::new(Arc::new(trading_endpoint));
 
     let payer = Keypair::from_base58_string("your_payer_keypair");
-    let mint = Keypair::from_base58_string("your_mint_keypair");
+    let mint_key = Keypair::from_base58_string("your_mint_keypair");
     let buy_sol_amount = Some(sol_str_to_lamports("0.1").unwrap());
     let slippage_basis_points = 3000; // 30%
     let fee = PriorityFee {
@@ -131,10 +131,10 @@ pub async fn create() -> anyhow::Result<()> {
     let tip = sol_str_to_lamports("0.001").unwrap();
 
     let create = Create {
+        mint_private_key: mint_key,
         name: metadata.metadata.name,
         symbol: metadata.metadata.symbol,
         uri: metadata.metadata_uri,
-        mint: mint.pubkey(),
         buy_sol_amount,
         slippage_basis_points: Some(slippage_basis_points),
     };

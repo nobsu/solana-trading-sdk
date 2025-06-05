@@ -35,6 +35,7 @@ pub fn build_transaction(
     blockhash: Hash,
     fee: Option<PriorityFee>,
     tip: Option<TipFee>,
+    other_signers: Option<Vec<&Keypair>>,
 ) -> anyhow::Result<VersionedTransaction> {
     let mut insts = vec![];
     if let Some(fee) = fee {
@@ -50,7 +51,8 @@ pub fn build_transaction(
 
     let v0_message: v0::Message = v0::Message::try_compile(&payer.pubkey(), &insts, &[], blockhash)?;
     let versioned_message: VersionedMessage = VersionedMessage::V0(v0_message);
-    let transaction = VersionedTransaction::try_new(versioned_message, &[&payer])?;
+    let signers = vec![payer].into_iter().chain(other_signers.unwrap_or_default().into_iter()).collect::<Vec<_>>();
+    let transaction = VersionedTransaction::try_new(versioned_message, &signers)?;
 
     Ok(transaction)
 }

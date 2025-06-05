@@ -37,6 +37,7 @@ impl TradingEndpoint {
         blockhash: Hash,
         fee: Option<PriorityFee>,
         tip: Option<u64>,
+        other_signers: Option<Vec<&Keypair>>,
     ) -> anyhow::Result<Vec<Signature>> {
         let mut tasks = vec![];
         let mut signatures = vec![];
@@ -56,7 +57,7 @@ impl TradingEndpoint {
                 None
             };
 
-            let tx = build_transaction(payer, instructions.clone(), blockhash, fee, tip)?;
+            let tx = build_transaction(payer, instructions.clone(), blockhash, fee, tip, other_signers.clone())?;
             signatures.push(tx.signatures[0]);
             tasks.push(swqos.send_transaction(tx));
         }
@@ -84,7 +85,7 @@ impl TradingEndpoint {
 
             let txs = items
                 .iter()
-                .map(|item| build_transaction(&item.payer, item.instructions.clone(), blockhash, Some(fee), tip.take()))
+                .map(|item| build_transaction(&item.payer, item.instructions.clone(), blockhash, Some(fee), tip.take(), None))
                 .collect::<Result<Vec<_>, _>>()?;
 
             signatures.extend(txs.iter().map(|tx| tx.signatures[0]));
