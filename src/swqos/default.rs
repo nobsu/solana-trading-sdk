@@ -6,10 +6,7 @@ use crate::instruction::builder::{build_transaction, PriorityFee};
 use rand::seq::IndexedRandom;
 use solana_client::nonblocking::rpc_client::RpcClient;
 use solana_sdk::{
-    pubkey::Pubkey,
-    signature::{Keypair, Signature},
-    signer::Signer,
-    transaction::VersionedTransaction,
+    commitment_config::CommitmentConfig, pubkey::Pubkey, signature::{Keypair, Signature}, signer::Signer, transaction::VersionedTransaction
 };
 use spl_associated_token_account::get_associated_token_address;
 use std::sync::Arc;
@@ -128,7 +125,7 @@ impl DefaultSWQoSClient {
         const MAX_WAIT_SECONDS: u64 = 10;
         let ts = std::time::SystemTime::now();
         loop {
-            let confirmed = self.rpc_client.confirm_transaction(&signature).await?;
+            let confirmed = self.rpc_client.confirm_transaction_with_commitment(&signature, CommitmentConfig::processed()).await?.value;
             if confirmed {
                 break;
             }
