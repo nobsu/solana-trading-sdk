@@ -116,10 +116,9 @@ impl DexTrait for PumpSwap {
             fee,
             tip,
         )
-        .await
     }
 
-    async fn buy_immediately(
+    fn buy_immediately(
         &self,
         payer: &Keypair,
         mint: &Pubkey,
@@ -135,7 +134,7 @@ impl DexTrait for PumpSwap {
         let creator_vault = creator_vault.ok_or(anyhow::anyhow!("creator vault not provided: {}", mint.to_string()))?;
         let instruction = self.build_buy_instruction(payer, mint, &creator_vault, Buy { token_amount, sol_amount })?;
         let instructions = build_wsol_buy_instructions(payer, mint, sol_amount, instruction, create_ata)?;
-        let signatures = self.endpoint.build_and_broadcast_tx(payer, instructions, blockhash, fee, tip, None).await?;
+        let signatures = self.endpoint.build_and_broadcast_tx(payer, instructions, blockhash, fee, tip, None)?;
 
         Ok(signatures)
     }
@@ -172,10 +171,9 @@ impl DexTrait for PumpSwap {
             fee,
             tip,
         )
-        .await
     }
 
-    async fn sell_immediately(
+    fn sell_immediately(
         &self,
         payer: &Keypair,
         mint: &Pubkey,
@@ -191,7 +189,7 @@ impl DexTrait for PumpSwap {
         let creator_vault = creator_vault.ok_or(anyhow::anyhow!("creator vault not provided: {}", mint.to_string()))?;
         let instruction = self.build_sell_instruction(payer, mint, &creator_vault, Sell { token_amount, sol_amount })?;
         let instructions = build_wsol_sell_instructions(payer, mint, close_mint_ata, instruction)?;
-        let signatures = self.endpoint.build_and_broadcast_tx(payer, instructions, blockhash, fee, tip, None).await?;
+        let signatures = self.endpoint.build_and_broadcast_tx(payer, instructions, blockhash, fee, tip, None)?;
 
         Ok(signatures)
     }

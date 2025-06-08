@@ -21,7 +21,7 @@ pub trait DexTrait: Send + Sync + Any {
         fee: Option<PriorityFee>,
         tip: Option<u64>,
     ) -> anyhow::Result<Vec<Signature>>;
-    async fn buy_immediately(
+    fn buy_immediately(
         &self,
         payer: &Keypair,
         mint: &Pubkey,
@@ -44,7 +44,7 @@ pub trait DexTrait: Send + Sync + Any {
         fee: Option<PriorityFee>,
         tip: Option<u64>,
     ) -> anyhow::Result<Vec<Signature>>;
-    async fn sell_immediately(
+    fn sell_immediately(
         &self,
         payer: &Keypair,
         mint: &Pubkey,

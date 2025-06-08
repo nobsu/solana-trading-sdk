@@ -168,8 +168,7 @@ impl DexTrait for Pumpfun {
 
         let signatures = self
             .endpoint
-            .build_and_broadcast_tx(&payer, instructions, blockhash, fee, tip, Some(vec![&create.mint_private_key]))
-            .await?;
+            .build_and_broadcast_tx(&payer, instructions, blockhash, fee, tip, Some(vec![&create.mint_private_key]))?;
 
         Ok(signatures)
     }
@@ -200,10 +199,9 @@ impl DexTrait for Pumpfun {
             fee,
             tip,
         )
-        .await
     }
 
-    async fn buy_immediately(
+    fn buy_immediately(
         &self,
         payer: &Keypair,
         mint: &Pubkey,
@@ -227,7 +225,7 @@ impl DexTrait for Pumpfun {
             },
         )?;
         let instructions = build_sol_buy_instructions(payer, mint, instruction, create_ata)?;
-        let signatures = self.endpoint.build_and_broadcast_tx(payer, instructions, blockhash, fee, tip, None).await?;
+        let signatures = self.endpoint.build_and_broadcast_tx(payer, instructions, blockhash, fee, tip, None)?;
 
         Ok(signatures)
     }
@@ -264,10 +262,9 @@ impl DexTrait for Pumpfun {
             fee,
             tip,
         )
-        .await
     }
 
-    async fn sell_immediately(
+    fn sell_immediately(
         &self,
         payer: &Keypair,
         mint: &Pubkey,
@@ -283,7 +280,7 @@ impl DexTrait for Pumpfun {
         let creator_vault = creator_vault.ok_or(anyhow::anyhow!("creator vault not provided: {}", mint.to_string()))?;
         let instruction = self.build_sell_instruction(payer, mint, creator_vault, Sell { token_amount, sol_amount })?;
         let instructions = build_sol_sell_instructions(payer, mint, instruction, close_mint_ata)?;
-        let signatures = self.endpoint.build_and_broadcast_tx(payer, instructions, blockhash, fee, tip, None).await?;
+        let signatures = self.endpoint.build_and_broadcast_tx(payer, instructions, blockhash, fee, tip, None)?;
 
         Ok(signatures)
     }

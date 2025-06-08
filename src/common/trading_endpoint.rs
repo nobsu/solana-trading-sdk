@@ -12,7 +12,7 @@ use std::sync::Arc;
 
 pub struct TradingEndpoint {
     pub rpc: Arc<RpcClient>,
-    pub swqos: Vec<Arc<dyn SWQoSTrait>>,
+    pub swqos: Arc<Vec<Arc<dyn SWQoSTrait>>>,
 }
 
 pub struct BatchTxItem {
@@ -22,7 +22,7 @@ pub struct BatchTxItem {
 
 impl TradingEndpoint {
     pub fn new(rpc: Arc<RpcClient>, swqos: Vec<Arc<dyn SWQoSTrait>>) -> Self {
-        Self { rpc, swqos }
+        Self { rpc, swqos: Arc::new(swqos) }
     }
 
     pub async fn get_latest_blockhash(&self) -> anyhow::Result<Hash> {
@@ -30,7 +30,7 @@ impl TradingEndpoint {
         Ok(blockhash)
     }
 
-    pub async fn build_and_broadcast_tx(
+    pub fn build_and_broadcast_tx(
         &self,
         payer: &Keypair,
         instructions: Vec<Instruction>,
@@ -39,9 +39,10 @@ impl TradingEndpoint {
         tip: Option<u64>,
         other_signers: Option<Vec<&Keypair>>,
     ) -> anyhow::Result<Vec<Signature>> {
-        let mut tasks = vec![];
         let mut signatures = vec![];
-        for swqos in &self.swqos {
+        let mut txs = Vec::new();
+
+        for swqos in self.swqos.iter() {
             let tip = if let Some(tip_account) = swqos.get_tip_account() {
                 if let Some(tip) = tip {
                     Some(TipFee {
@@ -51,6 +52,7 @@ impl TradingEndpoint {
                 } else {
                     // If no tip is provided, skip this Tip-SWQoS
                     eprintln!("No tip provided for SWQoS: {}", swqos.get_name());
+                    txs.push(None);
                     continue;
                 }
             } else {
@@ -59,14 +61,23 @@ impl TradingEndpoint {
 
             let tx = build_transaction(payer, instructions.clone(), blockhash, fee, tip, other_signers.clone())?;
             signatures.push(tx.signatures[0]);
-            tasks.push(swqos.send_transaction(tx));
+            txs.push(Some(tx));
         }
 
-        let result = futures::future::join_all(tasks).await;
-        let errors = result.into_iter().filter_map(|res| res.err()).collect::<Vec<_>>();
-        if errors.len() > 0 {
-            return Err(anyhow::anyhow!("{:?}", errors));
-        }
+        let all_swqos = self.swqos.clone();
+        tokio::spawn(async move {
+            let mut tasks = vec![];
+            for (swqos, tx) in all_swqos.iter().zip(txs.iter()) {
+                if let Some(tx) = tx {
+                    tasks.push(swqos.send_transaction(tx.clone()));
+                }
+            }
+            let result = futures::future::join_all(tasks).await;
+            let errors = result.into_iter().filter_map(|res| res.err()).collect::<Vec<_>>();
+            if errors.len() > 0 {
+                eprintln!("Errors occurred while sending transactions: {:?}", errors);
+            }
+        });
 
         Ok(signatures)
     }
@@ -74,7 +85,7 @@ impl TradingEndpoint {
     pub async fn build_and_broadcast_batch_txs(&self, items: Vec<BatchTxItem>, blockhash: Hash, fee: PriorityFee, tip: u64) -> anyhow::Result<Vec<Signature>> {
         let mut tasks = vec![];
         let mut signatures = vec![];
-        for swqos in &self.swqos {
+        for swqos in self.swqos.iter() {
             let tip_account = swqos
                 .get_tip_account()
                 .ok_or(anyhow::anyhow!("No tip account provided for SWQoS: {}", swqos.get_name()))?;
