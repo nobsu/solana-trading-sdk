@@ -2,10 +2,6 @@
 
 A comprehensive Rust SDK for trading on the Solana blockchain, with support for multiple DEXs and advanced transaction submission strategies.
 
-## Usage
-
-- **cargo add solana-trading-sdk**
-
 ## Features
 
 - **Multi-DEX Support**: Trade on Pump.fun, PumpSwap, and other Solana DEXs
@@ -34,14 +30,7 @@ A comprehensive Rust SDK for trading on the Solana blockchain, with support for 
 
 ## Installation
 
-Add this to your `Cargo.toml`:
-
-```toml
-[dependencies]
-solana-trading-sdk = { path = "." }
-tokio = { version = "1.0", features = ["full"] }
-anyhow = "1.0"
-```
+- **cargo add solana-trading-sdk**
 
 ## Quick Start
 
