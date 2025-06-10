@@ -30,7 +30,9 @@ A comprehensive Rust SDK for trading on the Solana blockchain, with support for 
 
 ## Installation
 
-- **cargo add solana-trading-sdk**
+```sh
+cargo add solana-trading-sdk
+```
 
 ## Quick Start
 
