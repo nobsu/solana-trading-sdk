@@ -150,7 +150,7 @@ impl DexTrait for PumpSwap {
     ) -> anyhow::Result<Vec<Signature>> {
         let creator_vault = creator_vault.ok_or(anyhow::anyhow!("creator vault not provided: {}", mint.to_string()))?;
         let instruction = self.build_sell_instruction(payer, mint, &creator_vault, Sell { token_amount, sol_amount })?;
-        let instructions = build_wsol_sell_instructions(payer, mint, close_mint_ata, instruction)?;
+        let instructions = build_wsol_sell_instructions(payer, mint, instruction, close_mint_ata)?;
         let signatures = self.endpoint.build_and_broadcast_tx(payer, instructions, blockhash, fee, tip, None)?;
 
         Ok(signatures)
@@ -222,7 +222,7 @@ impl DexTrait for PumpSwap {
                     sol_amount: sol_lamports_with_slippage,
                 },
             )?;
-            let instructions = build_wsol_sell_instructions(&item.payer, mint, item.close_mint_ata, instruction)?;
+            let instructions = build_wsol_sell_instructions(&item.payer, mint, instruction, item.close_mint_ata)?;
             batch_items.push(BatchTxItem {
                 payer: item.payer,
                 instructions,

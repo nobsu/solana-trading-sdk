@@ -80,10 +80,15 @@ pub fn build_sol_buy_instructions(payer: &Keypair, mint: &Pubkey, buy_instructio
     Ok(instructions)
 }
 
-pub fn build_sol_sell_instructions(payer: &Keypair, mint: &Pubkey, sell_instruction: Instruction, close_ata: bool) -> Result<Vec<Instruction>, anyhow::Error> {
+pub fn build_sol_sell_instructions(
+    payer: &Keypair,
+    mint: &Pubkey,
+    sell_instruction: Instruction,
+    close_mint_ata: bool,
+) -> Result<Vec<Instruction>, anyhow::Error> {
     let mut instructions = vec![sell_instruction];
 
-    if close_ata {
+    if close_mint_ata {
         let mint_ata = get_associated_token_address(&payer.pubkey(), &mint);
         instructions.push(close_account(&spl_token::ID, &mint_ata, &payer.pubkey(), &payer.pubkey(), &[&payer.pubkey()])?);
     }
@@ -134,7 +139,7 @@ pub fn build_wsol_buy_instructions(
     Ok(instructions)
 }
 
-pub fn build_wsol_sell_instructions(payer: &Keypair, mint: &Pubkey, close_mint_ata: bool, sell_instruction: Instruction) -> anyhow::Result<Vec<Instruction>> {
+pub fn build_wsol_sell_instructions(payer: &Keypair, mint: &Pubkey, sell_instruction: Instruction, close_mint_ata: bool) -> anyhow::Result<Vec<Instruction>> {
     let mint_ata = get_associated_token_address(&payer.pubkey(), &mint);
     let wsol_ata = get_associated_token_address(&payer.pubkey(), &PUBKEY_WSOL);
 
