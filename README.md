@@ -2,6 +2,10 @@
 
 A comprehensive Rust SDK for trading on the Solana blockchain, with support for multiple DEXs and advanced transaction submission strategies.
 
+## Usage
+
+- **cargo add solana-trading-sdk**
+
 ## Features
 
 - **Multi-DEX Support**: Trade on Pump.fun, PumpSwap, and other Solana DEXs
@@ -12,8 +16,12 @@ A comprehensive Rust SDK for trading on the Solana blockchain, with support for 
 
 ## Supported DEXs
 
-- **Pumpfun**: The popular meme coin launchpad
-- **PumpSwap**: Advanced trading features for pump tokens
+- **Pumpfun**
+- **PumpSwap**
+- **RaydiumLaunchpad**
+- **Boopfun**
+- **Moonshot**: Comming soon
+- **Believe**: Comming soon
 
 ## Supported SWQoS Providers
 
