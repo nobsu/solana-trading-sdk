@@ -1,6 +1,10 @@
 pub mod amm_calc;
+pub mod boopfun;
 pub mod dex_traits;
 pub mod pumpfun;
-pub mod pumpswap;
-pub mod types;
+pub mod pumpfun_common_types;
 pub mod pumpfun_types;
+pub mod pumpswap;
+pub mod pumpswap_types;
+pub mod types;
+pub mod boopfun_tpyes;

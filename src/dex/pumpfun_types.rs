@@ -1,52 +1,69 @@
-use super::types::{Buy, Sell};
+use super::types::Create;
 use borsh::{BorshDeserialize, BorshSerialize};
+use serde::{Deserialize, Serialize};
+use solana_sdk::{pubkey, pubkey::Pubkey};
+
+pub const PUBKEY_PUMPFUN: Pubkey = pubkey!("6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P");
+pub const PUBKEY_GLOBAL_ACCOUNT: Pubkey = pubkey!("4wTV1YmiEkRvAtNtsSGPtUrqRYQMe5SKy2uB4Jjaxnjf");
+pub const PUBKEY_EVENT_AUTHORITY: Pubkey = pubkey!("Ce6TQqeHC9p8KetsN6JsjHK7UTZk7nasjjnr7XxXp9F1");
+pub const PUBKEY_FEE_RECIPIENT: Pubkey = pubkey!("62qc2CNXwrYqQScmEdiZFFAnJR262PxWEuNQtxfafNgV");
+
+pub const GLOBAL_SEED: &[u8] = b"global";
+pub const MINT_AUTHORITY_SEED: &[u8] = b"mint-authority";
+pub const BONDING_CURVE_SEED: &[u8] = b"bonding-curve";
+pub const CREATOR_VAULT_SEED: &[u8] = b"creator-vault";
+pub const METADATA_SEED: &[u8] = b"metadata";
+
+pub const INITIAL_VIRTUAL_TOKEN_RESERVES: u64 = 1_073_000_000_000_000;
+pub const INITIAL_VIRTUAL_SOL_RESERVES: u64 = 30_000_000_000;
+
+lazy_static::lazy_static! {
+    pub static ref PUBKEY_MINT_AUTHORITY_PDA: Pubkey = Pubkey::find_program_address(&[MINT_AUTHORITY_SEED], &PUBKEY_PUMPFUN).0;
+    pub static ref PUBKEY_GLOBAL_PDA: Pubkey = Pubkey::find_program_address(&[GLOBAL_SEED], &PUBKEY_PUMPFUN).0;
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GlobalAccount {
+    pub discriminator: u64,
+    pub initialized: bool,
+    pub authority: Pubkey,
+    pub fee_recipient: Pubkey,
+    pub initial_virtual_token_reserves: u64,
+    pub initial_virtual_sol_reserves: u64,
+    pub initial_real_token_reserves: u64,
+    pub token_total_supply: u64,
+    pub fee_basis_points: u64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BondingCurveAccount {
+    pub discriminator: u64,
+    pub virtual_token_reserves: u64,
+    pub virtual_sol_reserves: u64,
+    pub real_token_reserves: u64,
+    pub real_sol_reserves: u64,
+    pub token_total_supply: u64,
+    pub complete: bool,
+    pub creator: Pubkey,
+}
 
 #[derive(Debug, Clone, PartialEq, Eq, BorshSerialize, BorshDeserialize)]
-pub struct BuyInfo {
+pub struct CreateInfo {
     pub discriminator: u64,
-    pub token_amount: u64,
-    pub sol_amount: u64,
+    pub name: String,
+    pub symbol: String,
+    pub uri: String,
+    pub creator: Pubkey,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, BorshSerialize, BorshDeserialize)]
-pub struct SellInfo {
-    pub discriminator: u64,
-    pub token_amount: u64,
-    pub sol_amount: u64,
-}
-
-impl From<Buy> for BuyInfo {
-    fn from(buy: Buy) -> Self {
+impl CreateInfo {
+    pub fn from_create(create: &Create, creator: Pubkey) -> Self {
         Self {
-            discriminator: 16927863322537952870,
-            token_amount: buy.token_amount,
-            sol_amount: buy.sol_amount,
+            discriminator: 8576854823835016728,
+            name: create.name.to_string(),
+            symbol: create.symbol.to_string(),
+            uri: create.uri.to_string(),
+            creator,
         }
-    }
-}
-
-impl From<Sell> for SellInfo {
-    fn from(sell: Sell) -> Self {
-        Self {
-            discriminator: 12502976635542562355,
-            token_amount: sell.token_amount,
-            sol_amount: sell.sol_amount,
-        }
-    }
-}
-
-impl BuyInfo {
-    pub fn to_buffer(&self) -> anyhow::Result<Vec<u8>> {
-        let mut buffer = Vec::new();
-        self.serialize(&mut buffer)?;
-        Ok(buffer)
-    }
-}
-
-impl SellInfo {
-    pub fn to_buffer(&self) -> anyhow::Result<Vec<u8>> {
-        let mut buffer = Vec::new();
-        self.serialize(&mut buffer)?;
-        Ok(buffer)
     }
 }
