@@ -1,0 +1,32 @@
+name: Auto Close Issue with Banned Keywords
+
+on:
+  issues:
+    types: [opened]
+
+permissions:
+  issues: write
+
+jobs:
+  close_if_banned:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check for banned keywords
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const bannedKeywords = ["刷星", "伪造"];
+            const title = context.payload.issue.title || "";
+            const body = context.payload.issue.body || "";
+            const found = bannedKeywords.some(word =>
+              title.includes(word) || body.includes(word)
+            );
+
+            if (found) {
+              await github.rest.issues.update({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                state: "closed"
+              });
+            }
