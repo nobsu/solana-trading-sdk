@@ -1,4 +1,4 @@
-use super::types::{Buy, Sell};
+use super::types::SwapInfo;
 use borsh::{BorshDeserialize, BorshSerialize};
 use serde::{Deserialize, Serialize};
 use solana_sdk::{pubkey, pubkey::Pubkey};
@@ -88,8 +88,8 @@ pub struct SellInfo {
     pub sol_amount: u64,
 }
 
-impl From<Buy> for BuyInfo {
-    fn from(buy: Buy) -> Self {
+impl From<SwapInfo> for BuyInfo {
+    fn from(buy: SwapInfo) -> Self {
         Self {
             discriminator: 7598512818552209290,
             token_amount: buy.token_amount,
@@ -98,8 +98,8 @@ impl From<Buy> for BuyInfo {
     }
 }
 
-impl From<Sell> for SellInfo {
-    fn from(sell: Sell) -> Self {
+impl From<SwapInfo> for SellInfo {
+    fn from(sell: SwapInfo) -> Self {
         Self {
             discriminator: 12576214989484342637,
             token_amount: sell.token_amount,
