@@ -59,7 +59,7 @@ impl DexTrait for Pumpfun {
 
         Ok(PoolInfo {
             pool: bonding_curve_pda,
-            creator: bonding_curve.creator,
+            creator: Some(bonding_curve.creator),
             creator_vault: Self::get_creator_vault_pda(&bonding_curve.creator),
             token_reserves: bonding_curve.virtual_token_reserves,
             sol_reserves: bonding_curve.virtual_sol_reserves,

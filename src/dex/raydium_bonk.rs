@@ -49,7 +49,7 @@ impl DexTrait for RaydiumBonk {
 
         Ok(PoolInfo {
             pool: pool_pda,
-            creator: bonding_curve.creator,
+            creator: Some(bonding_curve.creator),
             creator_vault: None,
             token_reserves: bonding_curve.virtual_base,
             sol_reserves: bonding_curve.virtual_quote,

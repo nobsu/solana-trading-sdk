@@ -1,7 +1,9 @@
 pub mod amm_calc;
+pub mod believe;
 pub mod boopfun;
 pub mod boopfun_types;
 pub mod dex_traits;
+pub mod moonit;
 pub mod pumpfun;
 pub mod pumpfun_common_types;
 pub mod pumpfun_types;
@@ -10,3 +12,4 @@ pub mod pumpswap_types;
 pub mod raydium_bonk;
 pub mod raydium_bonk_types;
 pub mod types;
+pub mod moonit_types;

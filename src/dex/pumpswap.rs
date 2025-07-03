@@ -75,7 +75,7 @@ impl DexTrait for PumpSwap {
 
         Ok(super::types::PoolInfo {
             pool: pool,
-            creator: pool_account.coin_creator,
+            creator: Some(pool_account.coin_creator),
             creator_vault: Some(Self::get_creator_vault(&pool_account.coin_creator)),
             token_reserves: pool_base_reserve,
             sol_reserves: pool_quote_reserve,
