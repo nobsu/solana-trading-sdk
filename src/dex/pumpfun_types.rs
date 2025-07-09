@@ -1,5 +1,6 @@
 use super::types::Create;
 use borsh::{BorshDeserialize, BorshSerialize};
+use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
 use solana_sdk::{pubkey, pubkey::Pubkey};
 
@@ -17,10 +18,8 @@ pub const METADATA_SEED: &[u8] = b"metadata";
 pub const INITIAL_VIRTUAL_TOKEN_RESERVES: u64 = 1_073_000_000_000_000;
 pub const INITIAL_VIRTUAL_SOL_RESERVES: u64 = 30_000_000_000;
 
-lazy_static::lazy_static! {
-    pub static ref PUBKEY_MINT_AUTHORITY_PDA: Pubkey = Pubkey::find_program_address(&[MINT_AUTHORITY_SEED], &PUBKEY_PUMPFUN).0;
-    pub static ref PUBKEY_GLOBAL_PDA: Pubkey = Pubkey::find_program_address(&[GLOBAL_SEED], &PUBKEY_PUMPFUN).0;
-}
+pub static PUBKEY_MINT_AUTHORITY_PDA: Lazy<Pubkey> = Lazy::new(|| Pubkey::find_program_address(&[MINT_AUTHORITY_SEED], &PUBKEY_PUMPFUN).0);
+pub static PUBKEY_GLOBAL_PDA: Lazy<Pubkey> = Lazy::new(|| Pubkey::find_program_address(&[GLOBAL_SEED], &PUBKEY_PUMPFUN).0);
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct GlobalAccount {

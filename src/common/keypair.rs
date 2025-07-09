@@ -7,7 +7,7 @@ pub trait KeypairBase58 {
 impl KeypairBase58 for Keypair {
     fn from_base58(private_key: &str) -> anyhow::Result<Keypair> {
         let buf = bs58::decode(private_key.to_string()).into_vec()?;
-        let keypair = Keypair::from_bytes(&buf)?;
+        let keypair = Keypair::try_from(&buf[..])?;
         Ok(keypair)
     }
 }

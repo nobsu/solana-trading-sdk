@@ -42,7 +42,6 @@ pub trait DexTrait: Send + Sync + Any {
         self.buy_immediately(
             payer,
             mint,
-            None,
             pool_info.creator_vault.as_ref(),
             sol_lamports_with_slippage,
             buy_token_amount,
@@ -56,7 +55,6 @@ pub trait DexTrait: Send + Sync + Any {
         &self,
         payer: &Keypair,
         mint: &Pubkey,
-        _: Option<&Pubkey>,
         creator_vault: Option<&Pubkey>,
         sol_amount: u64,
         token_amount: u64,
@@ -100,7 +98,6 @@ pub trait DexTrait: Send + Sync + Any {
         self.sell_immediately(
             payer,
             mint,
-            None,
             pool_info.creator_vault.as_ref(),
             token_amount,
             sol_lamports_with_slippage,
@@ -114,7 +111,6 @@ pub trait DexTrait: Send + Sync + Any {
         &self,
         payer: &Keypair,
         mint: &Pubkey,
-        _: Option<&Pubkey>,
         creator_vault: Option<&Pubkey>,
         token_amount: u64,
         sol_amount: u64,

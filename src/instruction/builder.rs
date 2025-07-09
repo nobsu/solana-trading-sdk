@@ -8,7 +8,6 @@ use solana_sdk::{
     pubkey::Pubkey,
     signature::Keypair,
     signer::Signer,
-    system_instruction,
     transaction::VersionedTransaction,
 };
 use spl_associated_token_account::{
@@ -44,7 +43,7 @@ pub fn build_transaction(
     }
 
     if let Some(tip) = tip {
-        insts.push(system_instruction::transfer(&payer.pubkey(), &tip.tip_account, tip.tip_lamports));
+        insts.push(solana_sdk::system_instruction::transfer(&payer.pubkey(), &tip.tip_account, tip.tip_lamports));
     }
 
     insts.extend(instructions);
@@ -128,7 +127,7 @@ pub fn build_wsol_buy_instructions(
     ));
 
     let wsol_ata = get_associated_token_address(&payer.pubkey(), &PUBKEY_WSOL);
-    instructions.push(system_instruction::transfer(&payer.pubkey(), &wsol_ata, amount_sol));
+    instructions.push(solana_sdk::system_instruction::transfer(&payer.pubkey(), &wsol_ata, amount_sol));
 
     instructions.push(sync_native(&spl_token::ID, &wsol_ata).unwrap());
 
