@@ -12,8 +12,8 @@ pub const PUBKEY_RAYDIUM_BONK_EVENT_AUTHORITY: Pubkey = pubkey!("2DPAtwB8L12vrMR
 #[derive(Debug, Clone, PartialEq, Eq, BorshSerialize, BorshDeserialize)]
 pub struct BuyInfo {
     pub discriminator: u64,
-    pub token_amount: u64,
     pub sol_amount: u64,
+    pub token_amount: u64,
     pub share_fee_rate: u64,
 }
 
