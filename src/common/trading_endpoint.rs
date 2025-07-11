@@ -69,7 +69,13 @@ impl TradingEndpoint {
             let mut tasks = vec![];
             for (swqos, tx) in all_swqos.iter().zip(txs.iter()) {
                 if let Some(tx) = tx {
-                    tasks.push(swqos.send_transaction(tx.clone()));
+                    if swqos.get_name() == "jito" {
+                        let mut jito_txs = Vec::new();
+                        jito_txs.push(tx.clone());
+                        tasks.push(swqos.send_transactions(jito_txs));
+                    } else {
+                        tasks.push(swqos.send_transaction(tx.clone()));
+                    }
                 }
             }
             let result = futures::future::join_all(tasks).await;
