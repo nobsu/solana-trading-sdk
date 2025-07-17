@@ -14,6 +14,7 @@ use solana_sdk::{
     signer::Signer,
 };
 use std::{any::Any, sync::Arc};
+use crate::instruction::ext_builder::NonceInfo;
 
 #[async_trait::async_trait]
 pub trait DexTrait: Send + Sync + Any {
@@ -214,6 +215,32 @@ pub trait DexTrait: Send + Sync + Any {
         }
 
         let signatures = trading_endpoint.build_and_broadcast_batch_txs(batch_items, blockhash, fee, tip).await?;
+
+        Ok(signatures)
+    }
+
+    fn buy_immediately_ext(
+        &self,
+        payer: &Keypair,
+        mint: &Pubkey,
+        creator_vault: Option<&Pubkey>,
+        sol_amount: u64,
+        token_amount: u64,
+        blockhash: Hash,
+        create_ata: CreateATA,
+        fee: Option<PriorityFee>,
+        tip: Option<u64>,
+        nonce_info: Option<NonceInfo>,
+    ) -> anyhow::Result<Vec<Signature>> {
+        let instruction = self.build_buy_instruction(payer, mint, creator_vault, SwapInfo { token_amount, sol_amount })?;
+        let instructions = if self.use_wsol() {
+            build_wsol_buy_instructions(payer, mint, sol_amount, instruction, create_ata)?
+        } else {
+            build_sol_buy_instructions(payer, mint, instruction, create_ata)?
+        };
+        let signatures = self
+            .get_trading_endpoint()
+            .build_and_broadcast_tx_ext(payer, instructions, blockhash, fee, tip, None, nonce_info)?;
 
         Ok(signatures)
     }

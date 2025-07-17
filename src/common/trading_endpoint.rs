@@ -9,6 +9,7 @@ use solana_sdk::{
     signature::{Keypair, Signature},
 };
 use std::sync::Arc;
+use crate::instruction::ext_builder::{build_transaction_ext, NonceInfo};
 
 pub struct TradingEndpoint {
     pub rpc: Arc<RpcClient>,
@@ -108,6 +109,58 @@ impl TradingEndpoint {
         if errors.len() > 0 {
             return Err(anyhow::anyhow!("{:?}", errors));
         }
+
+        Ok(signatures)
+    }
+
+    pub fn build_and_broadcast_tx_ext(
+        &self,
+        payer: &Keypair,
+        instructions: Vec<Instruction>,
+        blockhash: Hash,
+        fee: Option<PriorityFee>,
+        tip: Option<u64>,
+        other_signers: Option<Vec<&Keypair>>,
+        nonce_info: Option<NonceInfo>,
+    ) -> anyhow::Result<Vec<Signature>> {
+        let mut signatures = vec![];
+        let mut txs = Vec::new();
+
+        for swqos in self.swqos.iter() {
+            let tip = if let Some(tip_account) = swqos.get_tip_account() {
+                if let Some(tip) = tip {
+                    Some(TipFee {
+                        tip_account,
+                        tip_lamports: tip,
+                    })
+                } else {
+                    // If no tip is provided, skip this Tip-SWQoS
+                    eprintln!("No tip provided for SWQoS: {}", swqos.get_name());
+                    txs.push(None);
+                    continue;
+                }
+            } else {
+                None
+            };
+            let tx = build_transaction_ext(payer, instructions.clone(), blockhash, fee, tip, other_signers.clone(), nonce_info.clone())?;
+            signatures.push(tx.signatures[0]);
+            txs.push(Some(tx));
+        }
+
+        let all_swqos = self.swqos.clone();
+        tokio::spawn(async move {
+            let mut tasks = vec![];
+            for (swqos, tx) in all_swqos.iter().zip(txs.iter()) {
+                if let Some(tx) = tx {
+                    tasks.push(swqos.send_transaction(tx.clone()));
+                }
+            }
+            let result = futures::future::join_all(tasks).await;
+            let errors = result.into_iter().filter_map(|res| res.err()).collect::<Vec<_>>();
+            if errors.len() > 0 {
+                eprintln!("Errors occurred while sending transactions: {:?}", errors);
+            }
+        });
 
         Ok(signatures)
     }
