@@ -13,12 +13,12 @@ use solana_sdk::{
 use spl_associated_token_account::get_associated_token_address;
 use std::sync::Arc;
 
-pub struct Boopfun {
+pub struct Believe {
     pub endpoint: Arc<TradingEndpoint>,
 }
 
 #[async_trait::async_trait]
-impl DexTrait for Boopfun {
+impl DexTrait for Believe {
     async fn initialize(&self) -> anyhow::Result<()> {
         Ok(())
     }
@@ -121,7 +121,7 @@ impl DexTrait for Boopfun {
     }
 }
 
-impl Boopfun {
+impl Believe {
     pub fn new(endpoint: Arc<TradingEndpoint>) -> Self {
         Self { endpoint }
     }
