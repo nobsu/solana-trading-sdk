@@ -122,6 +122,8 @@ impl TradingEndpoint {
         tip: Option<u64>,
         other_signers: Option<Vec<&Keypair>>,
         nonce_info: Option<NonceInfo>,
+        buy_swqos: Option<Vec<String>>,
+        sell_swqos: Option<Vec<String>>,
     ) -> anyhow::Result<Vec<Signature>> {
         let mut signatures = vec![];
         let mut txs = Vec::new();
@@ -151,6 +153,16 @@ impl TradingEndpoint {
         tokio::spawn(async move {
             let mut tasks = vec![];
             for (swqos, tx) in all_swqos.iter().zip(txs.iter()) {
+                if let Some(buy_swqos) = buy_swqos.clone() {
+                    if !buy_swqos.contains(&swqos.get_name().to_string()) {
+                        continue;
+                    }
+                }
+                if let Some(sell_swqos) = sell_swqos.clone() {
+                    if !sell_swqos.contains(&swqos.get_name().to_string()) {
+                        continue;
+                    }
+                }
                 if let Some(tx) = tx {
                     tasks.push(swqos.send_transaction(tx.clone()));
                 }

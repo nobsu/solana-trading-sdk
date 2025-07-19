@@ -240,7 +240,33 @@ pub trait DexTrait: Send + Sync + Any {
         };
         let signatures = self
             .get_trading_endpoint()
-            .build_and_broadcast_tx_ext(payer, instructions, blockhash, fee, tip, None, nonce_info)?;
+            .build_and_broadcast_tx_ext(payer, instructions, blockhash, fee, tip, None, nonce_info, None, None)?;
+
+        Ok(signatures)
+    }
+
+    fn sell_immediately_ext(
+        &self,
+        payer: &Keypair,
+        mint: &Pubkey,
+        creator_vault: Option<&Pubkey>,
+        token_amount: u64,
+        sol_amount: u64,
+        close_mint_ata: bool,
+        blockhash: Hash,
+        fee: Option<PriorityFee>,
+        tip: Option<u64>,
+        swqos: Option<Vec<String>>,
+    ) -> anyhow::Result<Vec<Signature>> {
+        let instruction = self.build_sell_instruction(payer, mint, creator_vault, SwapInfo { token_amount, sol_amount })?;
+        let instructions = if self.use_wsol() {
+            build_wsol_sell_instructions(payer, mint, instruction, close_mint_ata)?
+        } else {
+            build_sol_sell_instructions(payer, mint, instruction, close_mint_ata)?
+        };
+        let signatures = self
+            .get_trading_endpoint()
+            .build_and_broadcast_tx_ext(payer, instructions, blockhash, fee, tip, None, None, None, swqos)?;
 
         Ok(signatures)
     }
