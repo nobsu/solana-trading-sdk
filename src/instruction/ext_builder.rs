@@ -36,6 +36,8 @@ pub fn build_transaction_ext(
             &nonce.nonce_account,
             &nonce.nonce_authority,
         ));
+
+        insts.push(ComputeBudgetInstruction::set_loaded_accounts_data_size_limit(300000));
     }
 
     if let Some(fee) = fee {
@@ -43,11 +45,11 @@ pub fn build_transaction_ext(
         insts.push(ComputeBudgetInstruction::set_compute_unit_limit(fee.unit_limit));
     }
 
+    insts.extend(instructions);
+
     if let Some(tip) = tip {
         insts.push(solana_sdk::system_instruction::transfer(&payer.pubkey(), &tip.tip_account, tip.tip_lamports));
     }
-
-    insts.extend(instructions);
 
     let v0_message: v0::Message = v0::Message::try_compile(&payer.pubkey(), &insts, &[], blockhash)?;
     let versioned_message: VersionedMessage = VersionedMessage::V0(v0_message);
