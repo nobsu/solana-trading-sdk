@@ -129,6 +129,17 @@ impl TradingEndpoint {
         let mut txs = Vec::new();
 
         for swqos in self.swqos.iter() {
+            if let Some(buy_swqos) = buy_swqos.clone() {
+                if !buy_swqos.contains(&swqos.get_name().to_string()) {
+                    continue;
+                }
+            }
+            if let Some(sell_swqos) = sell_swqos.clone() {
+                if !sell_swqos.contains(&swqos.get_name().to_string()) {
+                    continue;
+                }
+            }
+
             let tip = if let Some(tip_account) = swqos.get_tip_account() {
                 if let Some(tip) = tip {
                     Some(TipFee {
