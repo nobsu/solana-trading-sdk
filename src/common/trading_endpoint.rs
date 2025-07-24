@@ -1,3 +1,4 @@
+use tracing::{debug, error, info, warn};
 use crate::{
     instruction::builder::{build_transaction, PriorityFee, TipFee},
     swqos::SWQoSTrait,
@@ -131,11 +132,13 @@ impl TradingEndpoint {
         for swqos in self.swqos.iter() {
             if let Some(buy_swqos) = buy_swqos.clone() {
                 if !buy_swqos.contains(&swqos.get_name().to_string()) {
+                    txs.push(None);
                     continue;
                 }
             }
             if let Some(sell_swqos) = sell_swqos.clone() {
                 if !sell_swqos.contains(&swqos.get_name().to_string()) {
+                    txs.push(None);
                     continue;
                 }
             }
@@ -175,12 +178,15 @@ impl TradingEndpoint {
                     }
                 }
                 if let Some(tx) = tx {
+                    info!("Sending transaction to SWQoS: {}, {}", swqos.get_name(), tx.signatures[0]);
+                    println!("Sending transaction to SWQoS: {}, {}", swqos.get_name(), tx.signatures[0]);
                     tasks.push(swqos.send_transaction(tx.clone()));
                 }
             }
             let result = futures::future::join_all(tasks).await;
             let errors = result.into_iter().filter_map(|res| res.err()).collect::<Vec<_>>();
             if errors.len() > 0 {
+                warn!("Errors occurred while sending transactions: {:?}", errors);
                 eprintln!("Errors occurred while sending transactions: {:?}", errors);
             }
         });
