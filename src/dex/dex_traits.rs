@@ -35,7 +35,7 @@ pub trait DexTrait: Send + Sync + Any {
         tip: Option<u64>,
     ) -> anyhow::Result<Vec<Signature>> {
         let trading_endpoint = self.get_trading_endpoint();
-        let (pool_info, blockhash) = tokio::try_join!(self.get_pool(&mint), trading_endpoint.get_latest_blockhash(),)?;
+        let (pool_info, blockhash) = tokio::try_join!(self.get_pool(mint), trading_endpoint.get_latest_blockhash(),)?;
         let buy_token_amount = amm_buy_get_token_out(pool_info.sol_reserves, pool_info.token_reserves, sol_amount);
         let sol_lamports_with_slippage = calculate_with_slippage_buy(sol_amount, slippage_basis_points);
 
@@ -55,7 +55,7 @@ pub trait DexTrait: Send + Sync + Any {
         &self,
         payer: &Keypair,
         mint: &Pubkey,
-        creator_vault: Option<&Pubkey>,
+        extra_address: Option<&Pubkey>,
         sol_amount: u64,
         token_amount: u64,
         blockhash: Hash,
@@ -63,7 +63,7 @@ pub trait DexTrait: Send + Sync + Any {
         fee: Option<PriorityFee>,
         tip: Option<u64>,
     ) -> anyhow::Result<Vec<Signature>> {
-        let instruction = self.build_buy_instruction(payer, mint, creator_vault, SwapInfo { token_amount, sol_amount })?;
+        let instruction = self.build_buy_instruction(payer, mint, extra_address, SwapInfo { token_amount, sol_amount })?;
         let instructions = if self.use_wsol() {
             build_wsol_buy_instructions(payer, mint, sol_amount, instruction, create_ata)?
         } else {
@@ -111,7 +111,7 @@ pub trait DexTrait: Send + Sync + Any {
         &self,
         payer: &Keypair,
         mint: &Pubkey,
-        creator_vault: Option<&Pubkey>,
+        extra_address: Option<&Pubkey>,
         token_amount: u64,
         sol_amount: u64,
         close_mint_ata: bool,
@@ -119,7 +119,7 @@ pub trait DexTrait: Send + Sync + Any {
         fee: Option<PriorityFee>,
         tip: Option<u64>,
     ) -> anyhow::Result<Vec<Signature>> {
-        let instruction = self.build_sell_instruction(payer, mint, creator_vault, SwapInfo { token_amount, sol_amount })?;
+        let instruction = self.build_sell_instruction(payer, mint, extra_address, SwapInfo { token_amount, sol_amount })?;
         let instructions = if self.use_wsol() {
             build_wsol_sell_instructions(payer, mint, instruction, close_mint_ata)?
         } else {

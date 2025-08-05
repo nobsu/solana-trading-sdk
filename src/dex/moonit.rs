@@ -49,6 +49,7 @@ impl DexTrait for Moonit {
             pool: bonding_curve_pda,
             creator: None,
             creator_vault: None,
+            config: None,
             token_reserves: bonding_curve.curve_amount,
             sol_reserves: INITIAL_VIRTUAL_SOL_RESERVES + account.lamports,
         })
@@ -70,7 +71,7 @@ impl DexTrait for Moonit {
         };
 
         let buffer = trade_info.to_buffer()?;
-        let bonding_curve = Self::get_bonding_curve_pda(mint).ok_or(anyhow::anyhow!("Bonding curve not found: {}", mint.to_string()))?;
+        let bonding_curve = Self::get_bonding_curve_pda(mint)?;
 
         Ok(Instruction::new_with_bytes(
             PUBKEY_MOONIT,
@@ -103,7 +104,7 @@ impl DexTrait for Moonit {
         };
 
         let buffer = trade_info.to_buffer()?;
-        let bonding_curve = Self::get_bonding_curve_pda(mint).ok_or(anyhow::anyhow!("Bonding curve not found: {}", mint.to_string()))?;
+        let bonding_curve = Self::get_bonding_curve_pda(mint)?;
 
         Ok(Instruction::new_with_bytes(
             PUBKEY_MOONIT,
@@ -130,9 +131,9 @@ impl Moonit {
         Self { endpoint }
     }
 
-    pub fn get_bonding_curve_pda(mint: &Pubkey) -> Option<Pubkey> {
+    pub fn get_bonding_curve_pda(mint: &Pubkey) -> anyhow::Result<Pubkey> {
         let seeds: &[&[u8]; 2] = &[BONDING_CURVE_SEED, mint.as_ref()];
-        let pda = Pubkey::try_find_program_address(seeds, &PUBKEY_MOONIT)?;
-        Some(pda.0)
+        let pda = Pubkey::try_find_program_address(seeds, &PUBKEY_MOONIT).ok_or_else(|| anyhow::anyhow!("Failed to find bonding curve PDA"))?;
+        Ok(pda.0)
     }
 }

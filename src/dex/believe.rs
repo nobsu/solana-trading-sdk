@@ -36,8 +36,8 @@ impl DexTrait for Believe {
     }
 
     async fn get_pool(&self, mint: &Pubkey) -> anyhow::Result<PoolInfo> {
-        let bonding_curve_pda = Self::get_bonding_curve_pda(mint).unwrap();
-        let account = self.endpoint.rpc.get_account(&bonding_curve_pda).await?;
+        let pool = Self::get_bonding_curve_pda(mint)?;
+        let account = self.endpoint.rpc.get_account(&pool).await?;
         if account.data.is_empty() {
             return Err(anyhow::anyhow!("Bonding curve not found: {}", mint.to_string()));
         }
@@ -45,9 +45,10 @@ impl DexTrait for Believe {
         let bonding_curve = bincode::deserialize::<BondingCurveAccount>(&account.data)?;
 
         Ok(PoolInfo {
-            pool: bonding_curve_pda,
+            pool,
             creator: Some(bonding_curve.creator),
             creator_vault: None,
+            config: None,
             token_reserves: bonding_curve.virtual_token_reserves,
             sol_reserves: bonding_curve.virtual_sol_reserves,
         })
@@ -62,11 +63,10 @@ impl DexTrait for Believe {
 
         let buy_info: BuyInfo = buy.into();
         let buffer = buy_info.to_buffer()?;
-        let bonding_curve = Self::get_bonding_curve_pda(mint).ok_or(anyhow::anyhow!("Bonding curve not found: {}", mint.to_string()))?;
-        let bonding_curve_vault = Self::get_bonding_curve_vault(mint).ok_or(anyhow::anyhow!("Bonding curve vault not found: {}", mint.to_string()))?;
-        let bonding_curve_sol_vault =
-            Self::get_bonding_curve_sol_vault(mint).ok_or(anyhow::anyhow!("Bonding curve sol vault not found: {}", mint.to_string()))?;
-        let trading_fee_vault = Self::get_trading_fee_vault(mint).ok_or(anyhow::anyhow!("Trading fee vault not found: {}", mint.to_string()))?;
+        let bonding_curve = Self::get_bonding_curve_pda(mint)?;
+        let bonding_curve_vault = Self::get_bonding_curve_vault(mint)?;
+        let bonding_curve_sol_vault = Self::get_bonding_curve_sol_vault(mint)?;
+        let trading_fee_vault = Self::get_trading_fee_vault(mint)?;
 
         Ok(Instruction::new_with_bytes(
             PUBKEY_BOOPFUN,
@@ -94,11 +94,10 @@ impl DexTrait for Believe {
 
         let sell_info: SellInfo = sell.into();
         let buffer = sell_info.to_buffer()?;
-        let bonding_curve = Self::get_bonding_curve_pda(mint).ok_or(anyhow::anyhow!("Bonding curve not found: {}", mint.to_string()))?;
-        let bonding_curve_vault = Self::get_bonding_curve_vault(mint).ok_or(anyhow::anyhow!("Bonding curve vault not found: {}", mint.to_string()))?;
-        let bonding_curve_sol_vault =
-            Self::get_bonding_curve_sol_vault(mint).ok_or(anyhow::anyhow!("Bonding curve sol vault not found: {}", mint.to_string()))?;
-        let trading_fee_vault = Self::get_trading_fee_vault(mint).ok_or(anyhow::anyhow!("Trading fee vault not found: {}", mint.to_string()))?;
+        let bonding_curve = Self::get_bonding_curve_pda(mint)?;
+        let bonding_curve_vault = Self::get_bonding_curve_vault(mint)?;
+        let bonding_curve_sol_vault = Self::get_bonding_curve_sol_vault(mint)?;
+        let trading_fee_vault = Self::get_trading_fee_vault(mint)?;
 
         Ok(Instruction::new_with_bytes(
             PUBKEY_BOOPFUN,
@@ -126,27 +125,27 @@ impl Believe {
         Self { endpoint }
     }
 
-    pub fn get_bonding_curve_pda(mint: &Pubkey) -> Option<Pubkey> {
+    pub fn get_bonding_curve_pda(mint: &Pubkey) -> anyhow::Result<Pubkey> {
         let seeds: &[&[u8]; 2] = &[BONDING_CURVE_SEED, mint.as_ref()];
-        let pda = Pubkey::try_find_program_address(seeds, &PUBKEY_BOOPFUN)?;
-        Some(pda.0)
+        let pda = Pubkey::try_find_program_address(seeds, &PUBKEY_BOOPFUN).ok_or_else(|| anyhow::anyhow!("Failed to find bonding curve PDA"))?;
+        Ok(pda.0)
     }
 
-    pub fn get_bonding_curve_vault(mint: &Pubkey) -> Option<Pubkey> {
+    pub fn get_bonding_curve_vault(mint: &Pubkey) -> anyhow::Result<Pubkey> {
         let seeds: &[&[u8]; 2] = &[BONDING_CURVE_VAULT_SEED, mint.as_ref()];
-        let pda = Pubkey::try_find_program_address(seeds, &PUBKEY_BOOPFUN)?;
-        Some(pda.0)
+        let pda = Pubkey::try_find_program_address(seeds, &PUBKEY_BOOPFUN).ok_or_else(|| anyhow::anyhow!("Failed to find bonding curve vault PDA"))?;
+        Ok(pda.0)
     }
 
-    pub fn get_bonding_curve_sol_vault(mint: &Pubkey) -> Option<Pubkey> {
+    pub fn get_bonding_curve_sol_vault(mint: &Pubkey) -> anyhow::Result<Pubkey> {
         let seeds: &[&[u8]; 2] = &[BONDING_CURVE_SOL_VAULT_SEED, mint.as_ref()];
-        let pda = Pubkey::try_find_program_address(seeds, &PUBKEY_BOOPFUN)?;
-        Some(pda.0)
+        let pda = Pubkey::try_find_program_address(seeds, &PUBKEY_BOOPFUN).ok_or_else(|| anyhow::anyhow!("Failed to find bonding curve sol vault PDA"))?;
+        Ok(pda.0)
     }
 
-    pub fn get_trading_fee_vault(mint: &Pubkey) -> Option<Pubkey> {
+    pub fn get_trading_fee_vault(mint: &Pubkey) -> anyhow::Result<Pubkey> {
         let seeds: &[&[u8]; 2] = &[TRADING_FEE_VAULT_SEED, mint.as_ref()];
-        let pda = Pubkey::try_find_program_address(seeds, &PUBKEY_BOOPFUN)?;
-        Some(pda.0)
+        let pda = Pubkey::try_find_program_address(seeds, &PUBKEY_BOOPFUN).ok_or_else(|| anyhow::anyhow!("Failed to find trading fee vault PDA"))?;
+        Ok(pda.0)
     }
 }

@@ -13,6 +13,7 @@ pub struct PoolInfo {
     pub pool: Pubkey,
     pub creator: Option<Pubkey>,
     pub creator_vault: Option<Pubkey>,
+    pub config: Option<Pubkey>,
     pub token_reserves: u64,
     pub sol_reserves: u64,
 }
