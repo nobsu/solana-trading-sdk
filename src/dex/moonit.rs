@@ -50,6 +50,7 @@ impl DexTrait for Moonit {
             creator: None,
             creator_vault: None,
             config: None,
+            extra_address: None,
             token_reserves: bonding_curve.curve_amount,
             sol_reserves: INITIAL_VIRTUAL_SOL_RESERVES + account.lamports,
         })

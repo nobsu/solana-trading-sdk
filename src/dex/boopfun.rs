@@ -49,6 +49,7 @@ impl DexTrait for Boopfun {
             creator: Some(bonding_curve.creator),
             creator_vault: None,
             config: None,
+            extra_address: None,
             token_reserves: bonding_curve.virtual_token_reserves,
             sol_reserves: bonding_curve.virtual_sol_reserves,
         })

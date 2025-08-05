@@ -56,12 +56,14 @@ impl DexTrait for Pumpfun {
         }
 
         let bonding_curve = bincode::deserialize::<BondingCurveAccount>(&account.data)?;
+        let creator_vault = Self::get_creator_vault_pda(&bonding_curve.creator)?;
 
         Ok(PoolInfo {
             pool: bonding_curve_pda,
             creator: Some(bonding_curve.creator),
-            creator_vault: Some(Self::get_creator_vault_pda(&bonding_curve.creator)?),
+            creator_vault: Some(creator_vault),
             config: None,
+            extra_address: Some(creator_vault),
             token_reserves: bonding_curve.virtual_token_reserves,
             sol_reserves: bonding_curve.virtual_sol_reserves,
         })

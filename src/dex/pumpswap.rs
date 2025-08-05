@@ -71,12 +71,14 @@ impl DexTrait for PumpSwap {
 
         let pool_base_reserve = u64::from_str(&pool_base_account.token_amount.amount)?;
         let pool_quote_reserve = u64::from_str(&pool_quote_account.token_amount.amount)?;
+        let creator_vault = Self::get_creator_vault(&pool_account.coin_creator)?;
 
         Ok(super::types::PoolInfo {
             pool,
             creator: Some(pool_account.coin_creator),
-            creator_vault: Some(Self::get_creator_vault(&pool_account.coin_creator)?),
+            creator_vault: Some(creator_vault),
             config: None,
+            extra_address: Some(creator_vault),
             token_reserves: pool_base_reserve,
             sol_reserves: pool_quote_reserve,
         })

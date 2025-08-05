@@ -4,6 +4,10 @@ use crate::{
     dex::types::{PoolInfo, SwapInfo},
     instruction::builder::PriorityFee,
 };
+use solana_client::{
+    rpc_config::{RpcAccountInfoConfig, RpcProgramAccountsConfig},
+    rpc_filter::{Memcmp, MemcmpEncodedBytes, RpcFilterType},
+};
 use solana_sdk::{
     instruction::{AccountMeta, Instruction},
     pubkey::Pubkey,
@@ -13,12 +17,12 @@ use solana_sdk::{
 use spl_associated_token_account::get_associated_token_address;
 use std::sync::Arc;
 
-pub struct MemeoraDBC {
+pub struct MeteoraDBC {
     pub endpoint: Arc<TradingEndpoint>,
 }
 
 #[async_trait::async_trait]
-impl DexTrait for MemeoraDBC {
+impl DexTrait for MeteoraDBC {
     async fn initialize(&self) -> anyhow::Result<()> {
         Ok(())
     }
@@ -36,21 +40,20 @@ impl DexTrait for MemeoraDBC {
     }
 
     async fn get_pool(&self, mint: &Pubkey) -> anyhow::Result<PoolInfo> {
-        let pool = self.get_pool_by_base_mint(mint).await?;
-        let account = self.endpoint.rpc.get_account(&pool).await?;
-        if account.data.is_empty() {
-            return Err(anyhow::anyhow!("Bonding curve not found: {}", pool.to_string()));
-        }
-
-        let bonding_curve = bincode::deserialize::<VirtualPool>(&account.data)?;
+        let bonding_curve = self.get_pool_by_base_mint(mint).await?;
+        let pool = Self::get_virtual_pool_pda(mint, &bonding_curve.config)?;
+        let sqrt_price = (bonding_curve.sqrt_price as f64) / (2u128.pow(64) as f64);
+        let price = sqrt_price * sqrt_price;
+        let virtual_sol_reserve = price * bonding_curve.base_reserve as f64;
 
         Ok(PoolInfo {
             pool,
             creator: Some(bonding_curve.creator),
             creator_vault: None,
             config: Some(bonding_curve.config),
+            extra_address: Some(bonding_curve.config),
             token_reserves: bonding_curve.base_reserve,
-            sol_reserves: bonding_curve.quote_reserve,
+            sol_reserves: virtual_sol_reserve as u64,
         })
     }
 
@@ -65,8 +68,8 @@ impl DexTrait for MemeoraDBC {
         let buffer = buy_info.to_buffer()?;
         let config = config.ok_or_else(|| anyhow::anyhow!("Config must be provided for buy instruction"))?;
         let bonding_curve = Self::get_virtual_pool_pda(mint, config)?;
-        let bonding_curve_vault = Self::get_bonding_curve_vault(mint)?;
-        let bonding_curve_sol_vault = Self::get_bonding_curve_sol_vault(mint)?;
+        let bonding_curve_vault = Self::get_bonding_curve_vault(&bonding_curve, mint)?;
+        let bonding_curve_sol_vault = Self::get_bonding_curve_vault(&bonding_curve, &PUBKEY_WSOL)?;
 
         Ok(Instruction::new_with_bytes(
             PUBKEY_METEORA_DBC,
@@ -98,8 +101,8 @@ impl DexTrait for MemeoraDBC {
         let buffer = sell_info.to_buffer()?;
         let config = config.ok_or_else(|| anyhow::anyhow!("Config must be provided for sell instruction"))?;
         let bonding_curve = Self::get_virtual_pool_pda(mint, config)?;
-        let bonding_curve_vault = Self::get_bonding_curve_vault(mint)?;
-        let bonding_curve_sol_vault = Self::get_bonding_curve_sol_vault(mint)?;
+        let bonding_curve_vault = Self::get_bonding_curve_vault(&bonding_curve, mint)?;
+        let bonding_curve_sol_vault = Self::get_bonding_curve_vault(&bonding_curve, &PUBKEY_WSOL)?;
 
         Ok(Instruction::new_with_bytes(
             PUBKEY_METEORA_DBC,
@@ -125,41 +128,35 @@ impl DexTrait for MemeoraDBC {
     }
 }
 
-impl MemeoraDBC {
+impl MeteoraDBC {
     pub fn new(endpoint: Arc<TradingEndpoint>) -> Self {
         Self { endpoint }
     }
 
     pub fn get_virtual_pool_pda(mint: &Pubkey, config: &Pubkey) -> anyhow::Result<Pubkey> {
-        let seeds: &[&[u8]; 4] = &[VIRTUAL_POOL_SEED, config.as_ref(), mint.as_ref(), PUBKEY_WSOL.as_ref()];
+        let seeds = &[VIRTUAL_POOL_SEED, config.as_ref(), mint.as_ref(), PUBKEY_WSOL.as_ref()];
         let pda = Pubkey::try_find_program_address(seeds, &PUBKEY_METEORA_DBC).ok_or_else(|| anyhow::anyhow!("Failed to find virtual pool PDA"))?;
         Ok(pda.0)
     }
 
-    pub fn get_bonding_curve_vault(mint: &Pubkey) -> anyhow::Result<Pubkey> {
-        let seeds: &[&[u8]; 2] = &[VIRTUAL_POOL_BASE_VAULT, mint.as_ref()];
+    pub fn get_bonding_curve_vault(pool: &Pubkey, mint: &Pubkey) -> anyhow::Result<Pubkey> {
+        let seeds = &[VIRTUAL_POOL_VAULT_SEED, mint.as_ref(), pool.as_ref()];
         let pda = Pubkey::try_find_program_address(seeds, &PUBKEY_METEORA_DBC).ok_or_else(|| anyhow::anyhow!("Failed to find bonding curve vault PDA"))?;
         Ok(pda.0)
     }
 
-    pub fn get_bonding_curve_sol_vault(mint: &Pubkey) -> anyhow::Result<Pubkey> {
-        let seeds: &[&[u8]; 2] = &[VIRTUAL_POOL_QUOTE_VAULT, mint.as_ref()];
-        let pda = Pubkey::try_find_program_address(seeds, &PUBKEY_METEORA_DBC).ok_or_else(|| anyhow::anyhow!("Failed to find bonding curve SOL vault PDA"))?;
-        Ok(pda.0)
-    }
-
-    pub async fn get_pool_by_base_mint(&self, base_mint: &Pubkey) -> anyhow::Result<Pubkey> {
+    pub async fn get_pool_by_base_mint(&self, base_mint: &Pubkey) -> anyhow::Result<VirtualPool> {
         let accounts = self
             .endpoint
             .rpc
             .get_program_accounts_with_config(
                 &PUBKEY_METEORA_DBC,
-                solana_client::rpc_config::RpcProgramAccountsConfig {
-                    filters: Some(vec![
-                        solana_client::rpc_filter::RpcFilterType::DataSize(136),
-                        solana_client::rpc_filter::RpcFilterType::Memcmp(solana_client::rpc_filter::Memcmp::new_raw_bytes(8, base_mint.to_bytes().to_vec())),
-                    ]),
-                    account_config: solana_client::rpc_config::RpcAccountInfoConfig {
+                RpcProgramAccountsConfig {
+                    filters: Some(vec![RpcFilterType::Memcmp(Memcmp::new(
+                        136,
+                        MemcmpEncodedBytes::Bytes(base_mint.to_bytes().to_vec()),
+                    ))]),
+                    account_config: RpcAccountInfoConfig {
                         encoding: Some(solana_account_decoder::UiAccountEncoding::Base64),
                         commitment: None,
                         data_slice: None,
@@ -170,11 +167,11 @@ impl MemeoraDBC {
                 },
             )
             .await?;
-
         if accounts.is_empty() {
             return Err(anyhow::anyhow!("No bonding curve found for base mint: {}", base_mint.to_string()));
         }
+        let bonding_curve = bincode::deserialize::<VirtualPool>(&accounts[0].1.data)?;
 
-        Ok(accounts[0].0)
+        Ok(bonding_curve)
     }
 }

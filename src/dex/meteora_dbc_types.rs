@@ -8,8 +8,7 @@ pub const PUBKEY_METEORA_DBC_POOL_AUTHORITY: Pubkey = pubkey!("FhVo3mqL8PW5pH5U2
 pub const PUBKEY_METEORA_DBC_EVENT_AUTHORITY: Pubkey = pubkey!("8Ks12pbrD6PXxfty1hVQiE9sc289zgU1zHkvXhrSdriF");
 
 pub const VIRTUAL_POOL_SEED: &[u8] = b"pool";
-pub const VIRTUAL_POOL_BASE_VAULT: &[u8] = b"base_vault";
-pub const VIRTUAL_POOL_QUOTE_VAULT: &[u8] = b"quote_vault";
+pub const VIRTUAL_POOL_VAULT_SEED: &[u8] = b"token_vault";
 
 #[derive(Clone, Debug, Deserialize)]
 pub struct VolatilityTracker {

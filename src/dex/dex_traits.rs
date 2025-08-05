@@ -42,7 +42,7 @@ pub trait DexTrait: Send + Sync + Any {
         self.buy_immediately(
             payer,
             mint,
-            pool_info.creator_vault.as_ref(),
+            pool_info.extra_address.as_ref(),
             sol_lamports_with_slippage,
             buy_token_amount,
             blockhash,
@@ -98,7 +98,7 @@ pub trait DexTrait: Send + Sync + Any {
         self.sell_immediately(
             payer,
             mint,
-            pool_info.creator_vault.as_ref(),
+            pool_info.extra_address.as_ref(),
             token_amount,
             sol_lamports_with_slippage,
             close_mint_ata,
