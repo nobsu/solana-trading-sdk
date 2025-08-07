@@ -52,8 +52,7 @@ impl DexTrait for PumpSwap {
     }
 
     async fn get_pool(&self, mint: &Pubkey) -> anyhow::Result<super::types::PoolInfo> {
-        let pool = Self::get_pool_address(&mint);
-
+        let pool = Self::get_pool_address(mint)?;
         let pool_base = get_associated_token_address(&pool, &mint);
         let pool_quote = get_associated_token_address(&pool, &PUBKEY_WSOL);
         let (pool_account, pool_base_account, pool_quote_account) = tokio::try_join!(
@@ -72,11 +71,14 @@ impl DexTrait for PumpSwap {
 
         let pool_base_reserve = u64::from_str(&pool_base_account.token_amount.amount)?;
         let pool_quote_reserve = u64::from_str(&pool_quote_account.token_amount.amount)?;
+        let creator_vault = Self::get_creator_vault(&pool_account.coin_creator)?;
 
         Ok(super::types::PoolInfo {
-            pool: pool,
+            pool,
             creator: Some(pool_account.coin_creator),
-            creator_vault: Some(Self::get_creator_vault(&pool_account.coin_creator)),
+            creator_vault: Some(creator_vault),
+            config: None,
+            extra_address: Some(creator_vault),
             token_reserves: pool_base_reserve,
             sol_reserves: pool_quote_reserve,
         })
@@ -91,7 +93,7 @@ impl DexTrait for PumpSwap {
 
         let buy_info: BuyInfo = buy.into();
         let buffer = buy_info.to_buffer()?;
-        let pool = Self::get_pool_address(&mint);
+        let pool = Self::get_pool_address(&mint)?;
         let creator_vault = creator_vault.ok_or(anyhow::anyhow!("Creator vault is required for buy instruction"))?;
         let creator_vault_ata = get_associated_token_address(creator_vault, &PUBKEY_WSOL);
         let fee_recipient = self.global_account.get().unwrap().protocol_fee_recipients.choose(&mut rand::rng()).unwrap();
@@ -128,7 +130,7 @@ impl DexTrait for PumpSwap {
 
         let sell_info: SellInfo = sell.into();
         let buffer = sell_info.to_buffer()?;
-        let pool = Self::get_pool_address(&mint);
+        let pool = Self::get_pool_address(&mint)?;
         let creator_vault = creator_vault.ok_or(anyhow::anyhow!("Creator vault is required for buy instruction"))?;
         let creator_vault_ata = get_associated_token_address(creator_vault, &PUBKEY_WSOL);
         let fee_recipient = self.global_account.get().unwrap().protocol_fee_recipients.choose(&mut rand::rng()).unwrap();
@@ -169,25 +171,30 @@ impl PumpSwap {
         }
     }
 
-    pub fn get_creator_vault(creator: &Pubkey) -> Pubkey {
-        Pubkey::find_program_address(&[b"creator_vault", creator.as_ref()], &PUBKEY_PUMPSWAP).0
+    pub fn get_creator_vault(creator: &Pubkey) -> anyhow::Result<Pubkey> {
+        let pda = Pubkey::try_find_program_address(&[b"creator_vault", creator.as_ref()], &PUBKEY_PUMPSWAP)
+            .ok_or_else(|| anyhow::anyhow!("Failed to find creator vault PDA"))?;
+        Ok(pda.0)
     }
 
-    pub fn get_pool_authority_pda(mint: &Pubkey) -> Pubkey {
-        Pubkey::find_program_address(&[b"pool-authority", mint.as_ref()], &PUBKEY_PUMPFUN).0
+    pub fn get_pool_authority_pda(mint: &Pubkey) -> anyhow::Result<Pubkey> {
+        let pda = Pubkey::try_find_program_address(&[b"pool-authority", mint.as_ref()], &PUBKEY_PUMPFUN)
+            .ok_or_else(|| anyhow::anyhow!("Failed to find pool authority PDA"))?;
+        Ok(pda.0)
     }
 
-    pub fn get_pool_address(mint: &Pubkey) -> Pubkey {
-        Pubkey::find_program_address(
+    pub fn get_pool_address(mint: &Pubkey) -> anyhow::Result<Pubkey> {
+        let pda = Pubkey::try_find_program_address(
             &[
                 b"pool",
                 &0u16.to_le_bytes(),
-                Self::get_pool_authority_pda(mint).as_ref(),
+                Self::get_pool_authority_pda(mint)?.as_ref(),
                 mint.as_ref(),
                 PUBKEY_WSOL.as_ref(),
             ],
             &PUBKEY_PUMPSWAP,
         )
-        .0
+        .ok_or_else(|| anyhow::anyhow!("Failed to find pool address PDA"))?;
+        Ok(pda.0)
     }
 }

@@ -56,11 +56,14 @@ impl DexTrait for Pumpfun {
         }
 
         let bonding_curve = bincode::deserialize::<BondingCurveAccount>(&account.data)?;
+        let creator_vault = Self::get_creator_vault_pda(&bonding_curve.creator)?;
 
         Ok(PoolInfo {
             pool: bonding_curve_pda,
             creator: Some(bonding_curve.creator),
-            creator_vault: Self::get_creator_vault_pda(&bonding_curve.creator),
+            creator_vault: Some(creator_vault),
+            config: None,
+            extra_address: Some(creator_vault),
             token_reserves: bonding_curve.virtual_token_reserves,
             sol_reserves: bonding_curve.virtual_sol_reserves,
         })
@@ -76,7 +79,7 @@ impl DexTrait for Pumpfun {
         create_info.serialize(&mut buffer)?;
 
         let blockhash = self.endpoint.rpc.get_latest_blockhash().await?;
-        let bonding_curve = Self::get_bonding_curve_pda(&mint).ok_or(anyhow::anyhow!("Bonding curve not found"))?;
+        let bonding_curve = Self::get_bonding_curve_pda(&mint)?;
 
         let mut instructions = vec![];
         let create_instruction = Instruction::new_with_bytes(
@@ -133,7 +136,7 @@ impl DexTrait for Pumpfun {
 
         let buy_info: BuyInfo = buy.into();
         let buffer = buy_info.to_buffer()?;
-        let bonding_curve = Self::get_bonding_curve_pda(mint).ok_or(anyhow::anyhow!("Bonding curve not found: {}", mint.to_string()))?;
+        let bonding_curve = Self::get_bonding_curve_pda(mint)?;
 
         Ok(Instruction::new_with_bytes(
             PUBKEY_PUMPFUN,
@@ -160,7 +163,7 @@ impl DexTrait for Pumpfun {
 
         let sell_info: SellInfo = sell.into();
         let buffer = sell_info.to_buffer()?;
-        let bonding_curve = Self::get_bonding_curve_pda(mint).ok_or(anyhow::anyhow!("Bonding curve not found: {}", mint.to_string()))?;
+        let bonding_curve = Self::get_bonding_curve_pda(mint)?;
 
         Ok(Instruction::new_with_bytes(
             PUBKEY_PUMPFUN,
@@ -191,17 +194,17 @@ impl Pumpfun {
         }
     }
 
-    pub fn get_bonding_curve_pda(mint: &Pubkey) -> Option<Pubkey> {
+    pub fn get_bonding_curve_pda(mint: &Pubkey) -> anyhow::Result<Pubkey> {
         let seeds: &[&[u8]; 2] = &[BONDING_CURVE_SEED, mint.as_ref()];
         let program_id: &Pubkey = &PUBKEY_PUMPFUN;
-        let pda = Pubkey::try_find_program_address(seeds, program_id)?;
-        Some(pda.0)
+        let pda = Pubkey::try_find_program_address(seeds, program_id).ok_or_else(|| anyhow::anyhow!("Failed to find bonding curve PDA"))?;
+        Ok(pda.0)
     }
 
-    pub fn get_creator_vault_pda(creator: &Pubkey) -> Option<Pubkey> {
+    pub fn get_creator_vault_pda(creator: &Pubkey) -> anyhow::Result<Pubkey> {
         let seeds: &[&[u8]; 2] = &[CREATOR_VAULT_SEED, creator.as_ref()];
         let program_id: &Pubkey = &PUBKEY_PUMPFUN;
-        let pda = Pubkey::try_find_program_address(seeds, program_id)?;
-        Some(pda.0)
+        let pda = Pubkey::try_find_program_address(seeds, program_id).ok_or_else(|| anyhow::anyhow!("Failed to find creator vault PDA"))?;
+        Ok(pda.0)
     }
 }

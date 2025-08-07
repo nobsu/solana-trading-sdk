@@ -39,18 +39,20 @@ impl DexTrait for RaydiumBonk {
     }
 
     async fn get_pool(&self, mint: &Pubkey) -> anyhow::Result<PoolInfo> {
-        let pool_pda = Self::get_pool_pda(mint).unwrap();
-        let account = self.endpoint.rpc.get_account(&pool_pda).await?;
+        let pool = Self::get_pool_pda(mint)?;
+        let account = self.endpoint.rpc.get_account(&pool).await?;
         if account.data.is_empty() {
-            return Err(anyhow::anyhow!("Bonding curve not found: {}", mint.to_string()));
+            return Err(anyhow::anyhow!("Bonding curve not found: {}", pool.to_string()));
         }
 
         let bonding_curve = bincode::deserialize::<PoolState>(&account.data)?;
 
         Ok(PoolInfo {
-            pool: pool_pda,
+            pool,
             creator: Some(bonding_curve.creator),
             creator_vault: None,
+            config: None,
+            extra_address: None,
             token_reserves: bonding_curve.virtual_base,
             sol_reserves: bonding_curve.virtual_quote,
         })
@@ -65,10 +67,9 @@ impl DexTrait for RaydiumBonk {
 
         let buy_info: BuyInfo = buy.into();
         let buffer = buy_info.to_buffer()?;
-        let pool_address = Self::get_pool_pda(mint).ok_or(anyhow::anyhow!("Bonding curve not found: {}", mint.to_string()))?;
-        let pool_base_vault = Self::get_pool_mint_vault(mint, &pool_address).ok_or(anyhow::anyhow!("Bonding curve vault not found: {}", mint.to_string()))?;
-        let pool_quote_vault =
-            Self::get_pool_quote_vault(&PUBKEY_WSOL, &pool_address).ok_or(anyhow::anyhow!("Bonding curve sol vault not found: {}", mint.to_string()))?;
+        let pool_address = Self::get_pool_pda(mint)?;
+        let pool_base_vault = Self::get_pool_mint_vault(mint, &pool_address)?;
+        let pool_quote_vault = Self::get_pool_quote_vault(&PUBKEY_WSOL, &pool_address)?;
 
         Ok(Instruction::new_with_bytes(
             PUBKEY_RAYDIUM_BONK,
@@ -98,10 +99,9 @@ impl DexTrait for RaydiumBonk {
 
         let sell_info: SellInfo = sell.into();
         let buffer = sell_info.to_buffer()?;
-        let pool_address = Self::get_pool_pda(mint).ok_or(anyhow::anyhow!("Bonding curve not found: {}", mint.to_string()))?;
-        let pool_base_vault = Self::get_pool_mint_vault(mint, &pool_address).ok_or(anyhow::anyhow!("Bonding curve vault not found: {}", mint.to_string()))?;
-        let pool_quote_vault =
-            Self::get_pool_quote_vault(&PUBKEY_WSOL, &pool_address).ok_or(anyhow::anyhow!("Bonding curve sol vault not found: {}", mint.to_string()))?;
+        let pool_address = Self::get_pool_pda(mint)?;
+        let pool_base_vault = Self::get_pool_mint_vault(mint, &pool_address)?;
+        let pool_quote_vault = Self::get_pool_quote_vault(&PUBKEY_WSOL, &pool_address)?;
 
         Ok(Instruction::new_with_bytes(
             PUBKEY_RAYDIUM_BONK,
@@ -132,21 +132,21 @@ impl RaydiumBonk {
         Self { endpoint }
     }
 
-    pub fn get_pool_pda(mint: &Pubkey) -> Option<Pubkey> {
+    pub fn get_pool_pda(mint: &Pubkey) -> anyhow::Result<Pubkey> {
         let seeds: &[&[u8]; 3] = &[b"pool", mint.as_ref(), PUBKEY_WSOL.as_ref()];
-        let pda = Pubkey::try_find_program_address(seeds, &PUBKEY_RAYDIUM_BONK)?;
-        Some(pda.0)
+        let pda = Pubkey::try_find_program_address(seeds, &PUBKEY_RAYDIUM_BONK).ok_or(anyhow::anyhow!("Failed to find program address"))?;
+        Ok(pda.0)
     }
 
-    pub fn get_pool_mint_vault(mint: &Pubkey, pool: &Pubkey) -> Option<Pubkey> {
+    pub fn get_pool_mint_vault(mint: &Pubkey, pool: &Pubkey) -> anyhow::Result<Pubkey> {
         let seeds: &[&[u8]; 3] = &[b"pool_vault", pool.as_ref(), mint.as_ref()];
-        let pda = Pubkey::try_find_program_address(seeds, &PUBKEY_RAYDIUM_BONK)?;
-        Some(pda.0)
+        let pda = Pubkey::try_find_program_address(seeds, &PUBKEY_RAYDIUM_BONK).ok_or(anyhow::anyhow!("Failed to find pool mint vault PDA"))?;
+        Ok(pda.0)
     }
 
-    pub fn get_pool_quote_vault(quote: &Pubkey, pool: &Pubkey) -> Option<Pubkey> {
+    pub fn get_pool_quote_vault(quote: &Pubkey, pool: &Pubkey) -> anyhow::Result<Pubkey> {
         let seeds: &[&[u8]; 3] = &[b"pool_vault", pool.as_ref(), quote.as_ref()];
-        let pda = Pubkey::try_find_program_address(seeds, &PUBKEY_RAYDIUM_BONK)?;
-        Some(pda.0)
+        let pda = Pubkey::try_find_program_address(seeds, &PUBKEY_RAYDIUM_BONK).ok_or(anyhow::anyhow!("Failed to find pool quote vault PDA"))?;
+        Ok(pda.0)
     }
 }
